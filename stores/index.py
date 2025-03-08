@@ -1,7 +1,10 @@
 import asyncio
 import importlib
 import inspect
+import multiprocessing
+import os
 import sys
+from multiprocessing.connection import Connection
 from pathlib import Path
 from typing import Callable
 
@@ -58,10 +61,30 @@ def load_index_from_path(index_path: str | Path):
     return tools
 
 
+def isolate_fn_env(
+    fn: Callable, kwargs: dict, conn: Connection, env_vars: dict | None = None
+):
+    os.environ.clear()
+    os.environ.update(env_vars)
+
+    if inspect.iscoroutinefunction(fn):
+        loop = asyncio.get_event_loop()
+        result = loop.run_until_complete(fn(**kwargs))
+    else:
+        result = fn(**kwargs)
+    conn.send(result)
+    conn.close()
+
+
 class Index(BaseModel):
     tools: list[Callable]
+    env_vars: dict
 
-    def __init__(self, tools: list[Callable | str] | None = None):
+    def __init__(
+        self,
+        tools: list[Callable | str] | None = None,
+        env_vars: dict | None = None,
+    ):
         if tools is None:
             tools = DEFAULT_TOOLS
         else:
@@ -77,17 +100,25 @@ class Index(BaseModel):
             tools = loaded_tools
         super().__init__(
             tools=tools,
+            env_vars=env_vars or {},
         )
 
     @property
     def tools_dict(self):
         return {t.__name__: t for t in self.tools}
 
-    def execute(self, toolname: str, kwargs: dict):
+    def execute(self, toolname: str, kwargs: dict | None = None):
         tool = self.tools_dict[toolname]
-        if inspect.iscoroutinefunction(tool):
-            loop = asyncio.get_event_loop()
-            result = loop.run_until_complete(tool(**kwargs))
-        else:
-            result = tool(**kwargs)
-        return result
+        env_vars = self.env_vars.get(toolname, {})
+        kwargs = kwargs or {}
+
+        parent_conn, child_conn = multiprocessing.Pipe()
+        p = multiprocessing.Process(
+            target=isolate_fn_env,
+            args=(tool, kwargs, child_conn, env_vars),
+        )
+        p.start()
+        p.join()
+
+        output = parent_conn.recv()
+        return output
