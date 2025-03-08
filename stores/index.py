@@ -78,6 +78,7 @@ def isolate_fn_env(
 
 class Index(BaseModel):
     tools: list[Callable]
+    tools_dict: dict[str, Callable]
     env_vars: dict
 
     def __init__(
@@ -85,31 +86,62 @@ class Index(BaseModel):
         tools: list[Callable | str] | None = None,
         env_vars: dict | None = None,
     ):
-        if tools is None:
-            tools = DEFAULT_TOOLS
-        else:
-            loaded_tools = []
-            for tool in tools:
-                if isinstance(tool, str):
-                    try:
-                        loaded_tools += load_online_index(tool)
-                    except Exception:
-                        loaded_tools += load_index_from_path(tool)
-                elif isinstance(tool, Callable):
-                    loaded_tools.append(tool)
-            tools = loaded_tools
         super().__init__(
-            tools=tools,
+            tools=[],
+            tools_dict={},
             env_vars=env_vars or {},
         )
+        self._tool_indexes = {}
+        if tools is None:
+            for tool in DEFAULT_TOOLS:
+                self._add_tool(tool, "local")
+        else:
+            for tool in tools:
+                if isinstance(tool, str):
+                    index_name = tool
+                    try:
+                        loaded_index = load_online_index(index_name)
+                    except Exception:
+                        loaded_index = load_index_from_path(index_name)
+                    for t in loaded_index:
+                        self._add_tool(t, index_name)
+                elif isinstance(tool, Callable):
+                    self._add_tool(tool, "local")
 
-    @property
-    def tools_dict(self):
-        return {t.__name__: t for t in self.tools}
+    def _add_tool(self, tool: Callable, index: str = "local"):
+        if ":" in tool.__name__ and tool.__name__ in self.tools_dict:
+            raise ValueError(f"Duplicate tool - {tool.__name__}")
+
+        tool.__name__ = f"{index}:{tool.__name__}"
+
+        self.tools.append(tool)
+        self.tools_dict[tool.__name__] = tool
+        self._tool_indexes[tool.__name__] = index
 
     def execute(self, toolname: str, kwargs: dict | None = None):
+        if ":" not in toolname:
+            matching_tools = []
+            for key in self.tools_dict.keys():
+                if key.endswith(f":{toolname}"):
+                    matching_tools.append(key)
+            if len(matching_tools) == 0:
+                raise ValueError("No tool matching '{toolname}'")
+            elif len(matching_tools) > 1:
+                raise ValueError(
+                    f"'{toolname}' matches multiple tools - {matching_tools}"
+                )
+            else:
+                toolname = matching_tools[0]
+
+        if self.tools_dict.get(toolname) is None:
+            raise ValueError("No tool matching '{toolname}'")
+
         tool = self.tools_dict[toolname]
-        env_vars = self.env_vars.get(toolname, {})
+        index = self._tool_indexes[toolname]
+        if index == "local":
+            env_vars = os.environ
+        else:
+            env_vars = self.env_vars.get(index, {})
         kwargs = kwargs or {}
 
         parent_conn, child_conn = multiprocessing.Pipe()
