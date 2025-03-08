@@ -62,7 +62,10 @@ def load_index_from_path(index_path: str | Path):
 
 
 def isolate_fn_env(
-    fn: Callable, kwargs: dict, conn: Connection, env_vars: dict | None = None
+    fn: Callable,
+    kwargs: dict,
+    env_vars: dict | None = None,
+    conn: Connection | None = None,
 ):
     os.environ.clear()
     os.environ.update(env_vars)
@@ -72,8 +75,9 @@ def isolate_fn_env(
         result = loop.run_until_complete(fn(**kwargs))
     else:
         result = fn(**kwargs)
-    conn.send(result)
-    conn.close()
+    if conn:
+        conn.send(result)
+        conn.close()
 
 
 class Index(BaseModel):
@@ -147,7 +151,12 @@ class Index(BaseModel):
         parent_conn, child_conn = multiprocessing.Pipe()
         p = multiprocessing.Process(
             target=isolate_fn_env,
-            args=(tool, kwargs, child_conn, env_vars),
+            kwargs={
+                "fn": tool,
+                "kwargs": kwargs,
+                "env_vars": env_vars,
+                "conn": child_conn,
+            },
         )
         p.start()
         p.join()
