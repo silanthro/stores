@@ -1,2 +1,14 @@
 tools:
 - graph.plot_graph
+- comms.gmail.send_email_via_gmail
+- comms.telegram.send_telegram_message
+- sandbox.run_python_code
+- subprocess.run_subprocess
+
+env_vars:
+- GMAIL_ADDRESS:
+  - 'comms.gmail.send_email_via_gmail'
+- GMAIL_PASSWORD:
+  - 'comms.gmail.send_email_via_gmail'
+- TELEGRAM_API_TOKEN:
+  - 'comms.telegram.send_telegram_message'
