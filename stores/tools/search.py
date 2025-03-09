@@ -68,7 +68,6 @@ async def google_search(
         num_results (int): Number of results to return, defaults to 10
         news (bool): If True, searches Google News, defaults to False
     """
-
     url = f"https://google.com/search?q={query}"
     parse_fn = parse_google_search
     if news:
@@ -87,7 +86,10 @@ async def google_search(
     try:
         source = parse_fn(source, num_results=num_results)
     except Exception:
-        source = md(source)
+        try:
+            source = md(source)
+        except Exception:
+            pass
 
     response = await acompletion(
         model="gemini/gemini-2.0-flash-001",

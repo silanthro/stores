@@ -97,7 +97,7 @@ class Index(BaseModel):
         )
         self._tool_indexes = {}
         if tools is None:
-            tool = DEFAULT_TOOLS
+            tools = DEFAULT_TOOLS
         tools.append(REPLY)
 
         for tool in tools:
