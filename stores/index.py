@@ -12,7 +12,7 @@ import yaml
 from git import Repo
 from pydantic import BaseModel
 
-from stores.tools import DEFAULT_TOOLS
+from stores.tools import DEFAULT_TOOLS, REPLY
 
 
 def get_cache_dir():
@@ -97,20 +97,20 @@ class Index(BaseModel):
         )
         self._tool_indexes = {}
         if tools is None:
-            for tool in DEFAULT_TOOLS:
+            tool = DEFAULT_TOOLS
+        tools.append(REPLY)
+
+        for tool in tools:
+            if isinstance(tool, str):
+                index_name = tool
+                try:
+                    loaded_index = load_online_index(index_name)
+                except Exception:
+                    loaded_index = load_index_from_path(index_name)
+                for t in loaded_index:
+                    self._add_tool(t, index_name)
+            elif isinstance(tool, Callable):
                 self._add_tool(tool, "local")
-        else:
-            for tool in tools:
-                if isinstance(tool, str):
-                    index_name = tool
-                    try:
-                        loaded_index = load_online_index(index_name)
-                    except Exception:
-                        loaded_index = load_index_from_path(index_name)
-                    for t in loaded_index:
-                        self._add_tool(t, index_name)
-                elif isinstance(tool, Callable):
-                    self._add_tool(tool, "local")
 
     def _add_tool(self, tool: Callable, index: str = "local"):
         if ":" in tool.__name__ and tool.__name__ in self.tools_dict:
