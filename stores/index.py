@@ -143,7 +143,7 @@ class Index(BaseModel):
         tool = self.tools_dict[toolname]
         index = self._tool_indexes[toolname]
         if index == "local":
-            env_vars = os.environ
+            env_vars = os.environ.copy()
         else:
             env_vars = self.env_vars.get(index, {})
         kwargs = kwargs or {}
