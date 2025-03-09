@@ -20,13 +20,12 @@ index = stores.Index(
     },
 )
 
-messages = [{"role": "user", "content": stores.format_query(request, index.tools)}]
-
 response = completion(
     model="gemini/gemini-2.0-flash-001",
-    messages=messages,
-    num_retries=3,
-    timeout=60,
+    messages=[{
+        "role": "user",
+        "content": stores.format_query(request, index.tools),
+    }],
 ).choices[0].message.content
 
 print(response)
