@@ -12,6 +12,7 @@ import yaml
 from git import Repo
 from pydantic import BaseModel
 
+from stores.parsing import llm_parse_json
 from stores.tools import DEFAULT_TOOLS, REPLY
 
 
@@ -163,3 +164,7 @@ class Index(BaseModel):
 
         output = parent_conn.recv()
         return output
+
+    def parse_and_execute(self, msg: str):
+        toolcall = llm_parse_json(msg)
+        return self.execute(toolcall.get("toolname"), toolcall.get("kwargs"))
