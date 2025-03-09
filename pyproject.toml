@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "dirtyjson>=1.0.8",
+    "dotenv>=0.9.9",
     "fuzzywuzzy>=0.18.0",
     "gitpython>=3.1.44",
     "google-api-python-client>=2.163.0",

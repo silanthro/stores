@@ -1,12 +1,23 @@
+import os
+
+from dotenv import load_dotenv
 from litellm import completion
 
 import stores
 
-request = "Create a plot simulating a bearish stock market"
+load_dotenv()
+
+request = "Send an email to x@gmail.com containing a poem"
 
 # Load custom tools
 index = stores.Index(
     ["./custom_tools"],
+    env_vars={
+        "./custom_tools": {
+            "GMAIL_ADDRESS": os.environ["GMAIL_ADDRESS"],
+            "GMAIL_PASSWORD": os.environ["GMAIL_PASSWORD"],
+        },
+    },
 )
 
 messages = [{"role": "user", "content": stores.format_query(request, index.tools)}]

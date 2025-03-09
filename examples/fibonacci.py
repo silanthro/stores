@@ -2,7 +2,7 @@ from litellm import completion
 
 import stores
 
-request = "Create a plot simulating a bearish stock market"
+request = "Run a function to find the 10th Fibonacci number"
 
 # Load custom tools
 index = stores.Index(
@@ -23,3 +23,4 @@ print(response.choices[0].message.content)
 toolcall = stores.llm_parse_json(response.choices[0].message.content)
 
 output = index.execute(toolcall.get("toolname"), toolcall.get("kwargs"))
+print(output)

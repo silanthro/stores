@@ -2,12 +2,10 @@ from litellm import completion
 
 import stores
 
-request = "Create a plot simulating a bearish stock market"
+request = "Create a file named foo.txt"
 
 # Load custom tools
-index = stores.Index(
-    ["./custom_tools"],
-)
+index = stores.Index(["greentfrapp/file-ops"])
 
 messages = [{"role": "user", "content": stores.format_query(request, index.tools)}]
 

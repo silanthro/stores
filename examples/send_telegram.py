@@ -1,12 +1,22 @@
+import os
+
+from dotenv import load_dotenv
 from litellm import completion
 
 import stores
 
-request = "Create a plot simulating a bearish stock market"
+load_dotenv()
+
+request = "Send a Telegram message to @username containing a poem"
 
 # Load custom tools
 index = stores.Index(
     ["./custom_tools"],
+    env_vars={
+        "./custom_tools": {
+            "TELEGRAM_API_TOKEN": os.environ["TELEGRAM_API_TOKEN"],
+        },
+    },
 )
 
 messages = [{"role": "user", "content": stores.format_query(request, index.tools)}]

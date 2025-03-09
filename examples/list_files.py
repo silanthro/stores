@@ -2,10 +2,12 @@ from litellm import completion
 
 import stores
 
-request = "Search for latest AI news"
+request = "List the files in the current directory"
 
-# Load default tools
-index = stores.Index()
+# Load custom tools
+index = stores.Index(
+    ["./custom_tools"],
+)
 
 messages = [{"role": "user", "content": stores.format_query(request, index.tools)}]
 
