@@ -1,10 +1,10 @@
-import json
-import logging
-import os
 import re
 from typing import TypedDict
 
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+from litellm import acompletion
+from markdownify import markdownify as md
 
 from stores.parsing import llm_parse_json
 
@@ -12,9 +12,43 @@ from .run_subprocess import run_subprocess
 
 load_dotenv()
 
-logging.basicConfig()
-logger = logging.getLogger("get_google_results")
-logger.setLevel(logging.INFO)
+PARSE_TEXT_PROMPT = """
+Instructions:
+Retrieve all the Google search results from the text below.
+Ignore results that seem like obvious advertisements.
+Return your response as a JSON array where each item has keys 'title', 'url', 'description'
+
+Text:
+{text}
+"""
+
+
+def parse_google_search(source: str, num_results: int | None = None):
+    soup = BeautifulSoup(source, "html.parser")
+
+    result_els = soup.find_all("div", class_="g")
+
+    results = []
+    for result_el in result_els[:num_results]:
+        imgless_result_el = re.sub(r"<img.*?>", "", str(result_el))
+        md_content = md(imgless_result_el).replace("\xa0", " ").strip()
+        cleaned_md_content = re.sub(r"\n(\s|\n)*\n", " ", md_content)
+        results.append(cleaned_md_content)
+    return "\n\n".join(results)
+
+
+def parse_google_news(source: str, num_results: int = None):
+    soup = BeautifulSoup(source, "html.parser")
+
+    result_els = soup.find_all(lambda tag: "data-news-cluster-id" in tag.attrs)
+
+    results = []
+    for result_el in result_els[:num_results]:
+        imgless_result_el = re.sub(r"<img.*?>", "", str(result_el))
+        md_content = md(imgless_result_el).replace("\xa0", " ").strip()
+        cleaned_md_content = re.sub(r"\n(\s|\n)*\n", " ", md_content)
+        results.append(cleaned_md_content)
+    return "\n\n".join(results)
 
 
 class GoogleResult(TypedDict):
@@ -34,31 +68,39 @@ async def google_search(
         num_results (int): Number of results to return, defaults to 10
         news (bool): If True, searches Google News, defaults to False
     """
-    task = {
-        "tool_name": "get_google_results",
-        "kwargs": json.dumps(
-            json.dumps(
-                {
-                    "query": query,
-                    "num_results": num_results,
-                    "news": news,
-                }
-            )
-        ),
-    }
-    result = await run_subprocess(
+
+    url = f"https://google.com/search?q={query}"
+    parse_fn = parse_google_search
+    if news:
+        url += "&tbm=nws"
+        parse_fn = parse_google_news
+    url += f"&num={num_results}"
+    # batchsize = num_results
+    # max_attempts = 5
+
+    source = await run_subprocess(
         f"""docker run \
-            -e GEMINI_API_KEY={os.environ["GEMINI_API_KEY"]} \
             --rm \
-            greentfrapp/sandbox -t {task["tool_name"]} -a {task["kwargs"]}""",
+            greentfrapp/sandbox-2 {url}""",
         timeout=120,
     )
-    # logger.info(result["result"])
-    pattern = re.compile("<RESULT>(.*?)</RESULT>", flags=re.DOTALL)
-    task_result = re.search(pattern, result["result"])
     try:
-        parsed_result = llm_parse_json(task_result.group(1))
-        return {"results": parsed_result}
+        source = parse_fn(source, num_results=num_results)
     except Exception:
-        logger.info(result["result"])
-        logger.info(result["error"])
+        source = md(source)
+
+    response = await acompletion(
+        model="gemini/gemini-2.0-flash-001",
+        messages=[
+            {
+                "role": "user",
+                "content": PARSE_TEXT_PROMPT.format(
+                    text=source,
+                ),
+            }
+        ],
+        num_retries=3,
+        timeout=60,
+    )
+    response_results = llm_parse_json(response.choices[0].message.content)
+    return response_results
