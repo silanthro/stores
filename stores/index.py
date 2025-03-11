@@ -183,5 +183,5 @@ class Index(BaseModel):
         return output
 
     def parse_and_execute(self, msg: str):
-        toolcall = llm_parse_json(msg)
+        toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
         return self.execute(toolcall.get("toolname"), toolcall.get("kwargs"))
