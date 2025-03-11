@@ -4,6 +4,7 @@ tools:
 - comms.telegram.send_telegram_message
 - sandbox.run_python_code
 - run_subprocess.run_subprocess
+- news.reddit.search_reddit
 
 env_vars:
 - GMAIL_ADDRESS:
@@ -12,3 +13,5 @@ env_vars:
   - 'comms.gmail.send_email_via_gmail'
 - TELEGRAM_API_TOKEN:
   - 'comms.telegram.send_telegram_message'
+- GEMINI_API_KEY:
+  - 'news.reddit.search_reddit'

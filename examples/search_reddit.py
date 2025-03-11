@@ -9,15 +9,14 @@ load_dotenv()
 
 
 def main():
-    request = "Send the contents of test.txt to x@gmail.com"
+    request = "Find interesting posts about labubu in the singapore subreddit. Summarize the posts and provide the comment and article URLs."
 
     # Load custom tools
     index = stores.Index(
-        ["./custom_tools", "greentfrapp/file-ops"],
+        ["./custom_tools"],
         env_vars={
             "./custom_tools": {
-                "GMAIL_ADDRESS": os.environ["GMAIL_ADDRESS"],
-                "GMAIL_PASSWORD": os.environ["GMAIL_PASSWORD"],
+                "GEMINI_API_KEY": os.environ["GEMINI_API_KEY"],
             },
         },
     )
