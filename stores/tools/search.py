@@ -80,7 +80,8 @@ async def google_search(
     source = await run_subprocess(
         f"""docker run \
             --rm \
-            greentfrapp/sandbox-2 {url}""",
+            greentfrapp/sandbox-2:v0.1.2 '{url}'
+        """,
         timeout=120,
     )
     try:
