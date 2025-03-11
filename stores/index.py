@@ -43,9 +43,9 @@ def load_index_from_path(index_path: str | Path):
     with open(index_manifest) as file:
         manifest = yaml.safe_load(file)
     tools = []
-    for tool in manifest.get("tools", []):
-        module_name = ".".join(tool.split(".")[:-1])
-        tool_name = tool.split(".")[-1]
+    for tool_id in manifest.get("tools", []):
+        module_name = ".".join(tool_id.split(".")[:-1])
+        tool_name = tool_id.split(".")[-1]
 
         module_file = index_path / module_name.replace(".", "/")
         if (module_file / "__init__.py").exists():
@@ -58,18 +58,24 @@ def load_index_from_path(index_path: str | Path):
         sys.modules[spec.name] = module
         spec.loader.exec_module(module)
         tool = getattr(module, tool_name)
+        tool.__name__ = tool_id
         tools.append(tool)
     return tools
 
 
 def isolate_fn_env(
-    fn: Callable,
+    tool_name: str,
+    tool_index: str,
     kwargs: dict,
     env_vars: dict | None = None,
     conn: Connection | None = None,
 ):
     os.environ.clear()
     os.environ.update(env_vars)
+
+    index = load_index_from_path(tool_index)
+    index_dict = {t.__name__: t for t in index}
+    fn = index_dict[tool_name]
 
     if inspect.iscoroutinefunction(fn):
         loop = asyncio.get_event_loop()
@@ -117,20 +123,23 @@ class Index(BaseModel):
         if ":" in tool.__name__ and tool.__name__ in self.tools_dict:
             raise ValueError(f"Duplicate tool - {tool.__name__}")
 
-        tool.__name__ = f"{index}:{tool.__name__}"
+        # tool.__name__ = f"{index}:{tool.__name__}"
 
         self.tools.append(tool)
         self.tools_dict[tool.__name__] = tool
         self._tool_indexes[tool.__name__] = index
 
     def execute(self, toolname: str, kwargs: dict | None = None):
+        if toolname == "REPLY":
+            return kwargs.get("msg")
         if ":" not in toolname:
+            print(list(self.tools_dict.keys()))
             matching_tools = []
             for key in self.tools_dict.keys():
-                if key.endswith(f":{toolname}"):
+                if key == toolname or key.endswith(f":{toolname}"):
                     matching_tools.append(key)
             if len(matching_tools) == 0:
-                raise ValueError("No tool matching '{toolname}'")
+                raise ValueError(f"No tool matching '{toolname}'")
             elif len(matching_tools) > 1:
                 raise ValueError(
                     f"'{toolname}' matches multiple tools - {matching_tools}"
@@ -153,7 +162,8 @@ class Index(BaseModel):
         p = multiprocessing.Process(
             target=isolate_fn_env,
             kwargs={
-                "fn": tool,
+                "tool_name": tool.__name__,
+                "tool_index": index,
                 "kwargs": kwargs,
                 "env_vars": env_vars,
                 "conn": child_conn,
