@@ -4,7 +4,7 @@ from stores.prompts.tool_template import TOOL_TEMPLATE
 
 
 def get_tool_description(tool: Callable):
-    input_schema = tool.__annotations__
+    input_schema = tool.__annotations__.copy()
     if "return" in input_schema:
         del input_schema["return"]
     return TOOL_TEMPLATE.format(
