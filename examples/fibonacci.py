@@ -2,25 +2,31 @@ from litellm import completion
 
 import stores
 
-request = "Run a function to find the 10th Fibonacci number"
 
-# Load custom tools
-index = stores.Index(
-    ["./custom_tools"],
-)
+def main():
+    request = "Run a function to find the 10th Fibonacci number"
 
-messages = [{"role": "user", "content": stores.format_query(request, index.tools)}]
+    # Load custom tools
+    index = stores.Index(
+        ["./custom_tools"],
+    )
 
-response = completion(
-    model="gemini/gemini-2.0-flash-001",
-    messages=messages,
-    num_retries=3,
-    timeout=60,
-)
+    messages = [{"role": "user", "content": stores.format_query(request, index.tools)}]
 
-print(response.choices[0].message.content)
+    response = completion(
+        model="gemini/gemini-2.0-flash-001",
+        messages=messages,
+        num_retries=3,
+        timeout=60,
+    )
 
-toolcall = stores.llm_parse_json(response.choices[0].message.content)
+    print(response.choices[0].message.content)
 
-output = index.execute(toolcall.get("toolname"), toolcall.get("kwargs"))
-print(output)
+    toolcall = stores.llm_parse_json(response.choices[0].message.content)
+
+    output = index.execute(toolcall.get("toolname"), toolcall.get("kwargs"))
+    print(output)
+
+
+if __name__ == "__main__":
+    main()

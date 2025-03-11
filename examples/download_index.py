@@ -2,22 +2,28 @@ from litellm import completion
 
 import stores
 
-request = "Create a file named foo.txt"
 
-# Load custom tools
-index = stores.Index(["greentfrapp/file-ops"])
+def main():
+    request = "Create a file named foo.txt"
 
-messages = [{"role": "user", "content": stores.format_query(request, index.tools)}]
+    # Load custom tools
+    index = stores.Index(["greentfrapp/file-ops"])
 
-response = completion(
-    model="gemini/gemini-2.0-flash-001",
-    messages=messages,
-    num_retries=3,
-    timeout=60,
-)
+    messages = [{"role": "user", "content": stores.format_query(request, index.tools)}]
 
-print(response.choices[0].message.content)
+    response = completion(
+        model="gemini/gemini-2.0-flash-001",
+        messages=messages,
+        num_retries=3,
+        timeout=60,
+    )
 
-toolcall = stores.llm_parse_json(response.choices[0].message.content)
+    print(response.choices[0].message.content)
 
-output = index.execute(toolcall.get("toolname"), toolcall.get("kwargs"))
+    toolcall = stores.llm_parse_json(response.choices[0].message.content)
+
+    output = index.execute(toolcall.get("toolname"), toolcall.get("kwargs"))
+
+
+if __name__ == "__main__":
+    main()

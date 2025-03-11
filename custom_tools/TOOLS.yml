@@ -3,7 +3,7 @@ tools:
 - comms.gmail.send_email_via_gmail
 - comms.telegram.send_telegram_message
 - sandbox.run_python_code
-- subprocess.run_subprocess
+- run_subprocess.run_subprocess
 
 env_vars:
 - GMAIL_ADDRESS:
