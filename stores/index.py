@@ -81,7 +81,8 @@ def isolate_fn_env(
     else:
         fn = local_tool
     if inspect.iscoroutinefunction(fn):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         result = loop.run_until_complete(fn(**kwargs))
     else:
         result = fn(**kwargs)
@@ -139,7 +140,6 @@ class Index(BaseModel):
         if toolname == "REPLY":
             return kwargs.get("msg")
         if ":" not in toolname:
-            print(list(self.tools_dict.keys()))
             matching_tools = []
             for key in self.tools_dict.keys():
                 if key == toolname or key.endswith(f":{toolname}"):
