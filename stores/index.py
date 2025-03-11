@@ -66,6 +66,7 @@ def load_index_from_path(index_path: str | Path):
 def isolate_fn_env(
     tool_name: str,
     tool_index: str,
+    local_tool: Callable,
     kwargs: dict,
     env_vars: dict | None = None,
     conn: Connection | None = None,
@@ -73,10 +74,12 @@ def isolate_fn_env(
     os.environ.clear()
     os.environ.update(env_vars)
 
-    index = load_index_from_path(tool_index)
-    index_dict = {t.__name__: t for t in index}
-    fn = index_dict[tool_name]
-
+    if tool_index != "local":
+        index = load_index_from_path(tool_index)
+        index_dict = {t.__name__: t for t in index}
+        fn = index_dict[tool_name]
+    else:
+        fn = local_tool
     if inspect.iscoroutinefunction(fn):
         loop = asyncio.get_event_loop()
         result = loop.run_until_complete(fn(**kwargs))
@@ -103,6 +106,7 @@ class Index(BaseModel):
             env_vars=env_vars or {},
         )
         self._tool_indexes = {}
+        self._index_paths = {}
         if tools is None:
             tools = DEFAULT_TOOLS
         tools.append(REPLY)
@@ -112,8 +116,10 @@ class Index(BaseModel):
                 index_name = tool
                 try:
                     loaded_index = load_online_index(index_name)
+                    self._index_paths[index_name] = str(CACHE_DIR / index_name)
                 except Exception:
                     loaded_index = load_index_from_path(index_name)
+                    self._index_paths[index_name] = index_name
                 for t in loaded_index:
                     self._add_tool(t, index_name)
             elif isinstance(tool, Callable):
@@ -163,7 +169,8 @@ class Index(BaseModel):
             target=isolate_fn_env,
             kwargs={
                 "tool_name": tool.__name__,
-                "tool_index": index,
+                "tool_index": self._index_paths.get(index, index),
+                "local_tool": tool if index == "local" else None,
                 "kwargs": kwargs,
                 "env_vars": env_vars,
                 "conn": child_conn,
