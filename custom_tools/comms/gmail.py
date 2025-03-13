@@ -25,3 +25,5 @@ def send_email_via_gmail(subject: str, body: str, recipients: list[str]) -> None
             to_addrs=recipients,
             msg=msg.as_string(),
         )
+
+    return "Email sent successfully"
