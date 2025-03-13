@@ -6,7 +6,7 @@ import os
 import sys
 from multiprocessing.connection import Connection
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal
 
 import yaml
 from git import Repo
@@ -135,6 +135,87 @@ class Index(BaseModel):
         self.tools.append(tool)
         self.tools_dict[tool.__name__] = tool
         self._tool_indexes[tool.__name__] = index
+
+    def format_tools(self, provider: Literal["openai-chat-completions", "openai-responses", "anthropic"]):
+        formatted_tools = []
+        type_mappings = {
+            'str': 'string',
+            'int': 'integer',
+            'bool': 'boolean',
+            'float': 'number',
+            'list': 'array',
+            'NoneType': 'null',
+        }
+        for toolname, tool in self.tools_dict.items():
+            # Extract parameters and their types from the tool's function signature
+            signature = inspect.signature(tool)
+            parameters = {}
+            required_params = []
+            for param_name, param in signature.parameters.items():
+                param_type = param.annotation
+                if hasattr(param_type, '__origin__') and param_type.__origin__ is list:
+                    type_name = "array"
+                    item_type = param_type.__args__[0].__name__ if param_type.__args__ else 'string'
+                    parameters[param_name] = {
+                        "type": type_name,
+                        "items": {"type": type_mappings.get(item_type, item_type)}
+                    }
+                elif hasattr(param_type, '__args__'):
+                    # Use anyOf for union types
+                    any_of_types = [
+                        {"type": type_mappings.get(t.__name__, 'null') if hasattr(t, '__name__') else str(t)}
+                        for t in param_type.__args__
+                    ]
+                    parameters[param_name] = {"anyOf": any_of_types}
+                else:
+                    type_name = type_mappings.get(param_type.__name__, str(param_type)) if hasattr(param_type, '__name__') else str(param_type)
+                    parameters[param_name] = {"type": type_name}
+                if param.default is param.empty:
+                    required_params.append(param_name)
+
+            # Replace periods in function name with hyphens
+            formatted_tool_name = tool.__name__.replace('.', '-')
+
+            # Create formatted tool structure based on provider
+            if provider == "openai-chat-completions":
+                formatted_tool = {
+                    "type": "function",
+                    "function": {
+                        "name": formatted_tool_name,
+                        "description": tool.__doc__ or "No description available.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": parameters,
+                            "required": required_params,
+                            "additionalProperties": False
+                        },
+                        "strict": True
+                    }
+                }
+            elif provider == "openai-responses":
+                formatted_tool = {
+                    "type": "function",
+                    "name": formatted_tool_name,
+                    "description": tool.__doc__ or "No description available.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": parameters,
+                        "required": required_params,
+                        "additionalProperties": False
+                    }
+                }
+            elif provider == "anthropic":
+                formatted_tool = {
+                    "name": formatted_tool_name,
+                    "description": tool.__doc__ or "No description available.",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": parameters,
+                        "required": required_params
+                    }
+                }
+            formatted_tools.append(formatted_tool)
+        return formatted_tools
 
     def execute(self, toolname: str, kwargs: dict | None = None):
         if toolname == "REPLY":
