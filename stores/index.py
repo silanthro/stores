@@ -1,6 +1,7 @@
 import asyncio
 import importlib
 import inspect
+import logging
 import multiprocessing
 import os
 import sys
@@ -14,6 +15,9 @@ from pydantic import BaseModel
 
 from stores.parsing import llm_parse_json
 from stores.tools import DEFAULT_TOOLS, REPLY
+
+logging.basicConfig()
+logger = logging.getLogger("stores.index")
 
 
 def get_cache_dir():
@@ -115,14 +119,27 @@ class Index(BaseModel):
         for tool in tools:
             if isinstance(tool, str):
                 index_name = tool
-                try:
-                    loaded_index = load_online_index(index_name)
-                    self._index_paths[index_name] = str(CACHE_DIR / index_name)
-                except Exception:
-                    loaded_index = load_index_from_path(index_name)
-                    self._index_paths[index_name] = index_name
-                for t in loaded_index:
-                    self._add_tool(t, index_name)
+                loaded_index = None
+                if index_name.startswith(".") or index_name.startswith("/"):
+                    try:
+                        loaded_index = load_index_from_path(index_name)
+                        self._index_paths[index_name] = index_name
+                    except Exception:
+                        logger.warning(
+                            f'Unable to load index "{index_name}"', exc_info=True
+                        )
+                else:
+                    try:
+                        loaded_index = load_online_index(index_name)
+                        self._index_paths[index_name] = str(CACHE_DIR / index_name)
+                    except Exception:
+                        logger.warning(
+                            f'Unable to load index "{index_name}"\nIf this is a local index, index string should start with "." or "/"',
+                            exc_info=True,
+                        )
+                if loaded_index:
+                    for t in loaded_index:
+                        self._add_tool(t, index_name)
             elif isinstance(tool, Callable):
                 self._add_tool(tool, "local")
 
