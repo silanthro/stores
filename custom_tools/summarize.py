@@ -1,6 +1,7 @@
 from typing import Optional
-from litellm import completion
+
 from dotenv import load_dotenv
+from litellm import completion
 
 load_dotenv()
 
@@ -38,4 +39,4 @@ def summarize(text: str, add_request: Optional[str] = None, max_length: Optional
         return response.choices[0].message.content.strip()
         
     except Exception as e:
-        raise Exception(f"Error in text summarization: {str(e)}")
+        raise Exception(f"Error in text summarization: {str(e)}") from e
