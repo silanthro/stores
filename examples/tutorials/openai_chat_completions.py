@@ -1,24 +1,22 @@
 """
 This example shows how to use stores with OpenAI's Chat Completions API.
 """
+import json
 import os
-from dotenv import load_dotenv
 
 from openai import OpenAI
-import json
-
-load_dotenv()
 
 import stores
 
-def main():
-    # Example request to demonstrate the use of tools with OpenAI
-    request = "Make up a parenting poem and email it to alfredlua@gmail.com"
 
-    # Load default and custom tools and set the required environment variables
-    from stores.tools import DEFAULT_TOOLS
+def main():
+    # Example request and developer instruction to demonstrate the use of tools with OpenAI
+    request = "Make up a parenting poem and email it to x@gmail.com"
+    developer_instruction = "You are a helpful assistant who can generate poems in emails. When necessary, you have tools at your disposal."
+
+    # Load custom tools and set the required environment variables
     index = stores.Index(
-        DEFAULT_TOOLS + ["./custom_tools"],
+        ["./custom_tools"],
         env_vars={
             "./custom_tools": {
                 "GMAIL_ADDRESS": os.environ["GMAIL_ADDRESS"],
@@ -27,8 +25,11 @@ def main():
         },
     )
 
-    # Set up the initial message from the user to the model
-    messages = [{"role": "user", "content": request}]
+    # Set up the initial messages for the model and from the user
+    messages = [
+        {"role": "developer", "content": developer_instruction},
+        {"role": "user", "content": request}
+    ]
 
     # Initialize the model with OpenAI
     client = OpenAI()
