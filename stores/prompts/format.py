@@ -1,3 +1,4 @@
+import inspect
 from typing import Callable
 
 from stores.prompts.tool_template import TOOL_TEMPLATE
@@ -9,7 +10,7 @@ def get_tool_description(tool: Callable):
         del input_schema["return"]
     return TOOL_TEMPLATE.format(
         name=tool.__name__,
-        description=tool.__doc__,
+        description=inspect.getdoc(tool),
         input_schema=input_schema,
         output_schema=tool.__annotations__.get("return"),
     )

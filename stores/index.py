@@ -1,18 +1,19 @@
-import asyncio
-import importlib
-import inspect
 import logging
-import multiprocessing
-import os
-import sys
-from multiprocessing.connection import Connection
-from pathlib import Path
+import venv
 from typing import Callable
 
-import yaml
 from git import Repo
 from pydantic import BaseModel
 
+from stores.index_utils import (
+    CACHE_DIR,
+    VENV_NAME,
+    get_index_signatures,
+    get_index_tools,
+    install_venv_deps,
+    run_mp_process,
+    wrap_remote_tool,
+)
 from stores.parsing import llm_parse_json
 from stores.tools import DEFAULT_TOOLS, REPLY
 
@@ -20,79 +21,44 @@ logging.basicConfig()
 logger = logging.getLogger("stores.index")
 
 
-def get_cache_dir():
-    # TODO: Support venv and global
-    return Path(".tools")
-
-
-CACHE_DIR = get_cache_dir()
-TOOLS_CONFIG_FILENAME = "TOOLS.yml"
-
-
-def load_online_index(index_id: str):
-    dst = CACHE_DIR / index_id
-    if not dst.exists():
+def load_remote_index(index_id: str, branch_or_commit: str | None = None):
+    index_folder = CACHE_DIR / index_id
+    if not index_folder.exists():
         # TODO: Update to use DB
         repo_url = f"https://github.com/{index_id}.git"
-        # TODO: Use specific commit
-        Repo.clone_from(repo_url, dst)
-    return load_index_from_path(str(dst))
+        repo = Repo.clone_from(repo_url, index_folder)
+        if branch_or_commit:
+            repo.git.checkout(branch_or_commit)
+    # Create venv and install deps
+    venv_folder = index_folder / VENV_NAME
+    venv.create(venv_folder, symlinks=True, with_pip=True)
 
+    run_mp_process(
+        fn=install_venv_deps,
+        kwargs={"index_folder": index_folder},
+        venv_folder=venv_folder,
+    )
 
-def load_index_from_path(index_path: str | Path):
-    index_path = Path(index_path)
-    if index_path.name == TOOLS_CONFIG_FILENAME:
-        index_path = index_path.parent
-    index_manifest = index_path / TOOLS_CONFIG_FILENAME
-    with open(index_manifest) as file:
-        manifest = yaml.safe_load(file)
     tools = []
-    for tool_id in manifest.get("tools", []):
-        module_name = ".".join(tool_id.split(".")[:-1])
-        tool_name = tool_id.split(".")[-1]
-
-        module_file = index_path / module_name.replace(".", "/")
-        if (module_file / "__init__.py").exists():
-            module_file = module_file / "__init__.py"
-        else:
-            module_file = Path(str(module_file) + ".py")
-
-        spec = importlib.util.spec_from_file_location(module_name, module_file)
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
-        tool = getattr(module, tool_name)
-        tool.__name__ = tool_id
-        tools.append(tool)
+    index_signatures = run_mp_process(
+        fn=get_index_signatures,
+        kwargs={"index_folder": index_folder},
+        venv_folder=venv_folder,
+    )
+    tools = [
+        wrap_remote_tool(
+            s,
+            venv_folder,
+            index_folder,
+        )
+        for s in index_signatures
+    ]
     return tools
 
 
-def isolate_fn_env(
-    tool_name: str,
-    tool_index: str,
-    local_tool: Callable,
-    kwargs: dict,
-    env_vars: dict | None = None,
-    conn: Connection | None = None,
-):
-    os.environ.clear()
-    os.environ.update(env_vars)
-
-    if tool_index != "local":
-        index = load_index_from_path(tool_index)
-        index_dict = {t.__name__: t for t in index}
-        fn = index_dict[tool_name]
-    else:
-        fn = local_tool
-    if inspect.iscoroutinefunction(fn):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(fn(**kwargs))
-    else:
-        result = fn(**kwargs)
-    if conn:
-        conn.send(result)
-        conn.close()
+def load_local_index(index_path: str):
+    tools = get_index_tools(index_path)
+    return tools
 
 
 class Index(BaseModel):
@@ -120,17 +86,22 @@ class Index(BaseModel):
             if isinstance(tool, str):
                 index_name = tool
                 loaded_index = None
+                # Load local index
                 if index_name.startswith(".") or index_name.startswith("/"):
                     try:
-                        loaded_index = load_index_from_path(index_name)
+                        loaded_index = load_local_index(index_name)
                         self._index_paths[index_name] = index_name
                     except Exception:
                         logger.warning(
                             f'Unable to load index "{index_name}"', exc_info=True
                         )
+                # Load remote index
                 else:
                     try:
-                        loaded_index = load_online_index(index_name)
+                        branch_or_commit = None
+                        if ":" in index_name:
+                            index_name, branch_or_commit = index_name.split(":")
+                        loaded_index = load_remote_index(index_name, branch_or_commit)
                         self._index_paths[index_name] = str(CACHE_DIR / index_name)
                     except Exception:
                         logger.warning(
@@ -174,30 +145,7 @@ class Index(BaseModel):
             raise ValueError("No tool matching '{toolname}'")
 
         tool = self.tools_dict[toolname]
-        index = self._tool_indexes[toolname]
-        if index == "local":
-            env_vars = os.environ.copy()
-        else:
-            env_vars = self.env_vars.get(index, {})
-        kwargs = kwargs or {}
-
-        parent_conn, child_conn = multiprocessing.Pipe()
-        p = multiprocessing.Process(
-            target=isolate_fn_env,
-            kwargs={
-                "tool_name": tool.__name__,
-                "tool_index": self._index_paths.get(index, index),
-                "local_tool": tool if index == "local" else None,
-                "kwargs": kwargs,
-                "env_vars": env_vars,
-                "conn": child_conn,
-            },
-        )
-        p.start()
-        p.join()
-
-        output = parent_conn.recv()
-        return output
+        return tool(**kwargs)
 
     def parse_and_execute(self, msg: str):
         toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
