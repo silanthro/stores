@@ -15,7 +15,7 @@ import yaml
 from makefun import create_function
 
 # TODO: CACHE_DIR might resolve differently
-CACHE_DIR = Path("./tmp")
+CACHE_DIR = Path(".tools")
 VENV_NAME = ".venv"
 TOOLS_CONFIG_FILENAME = "TOOLS.yml"
 
