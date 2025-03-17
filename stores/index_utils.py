@@ -155,15 +155,15 @@ def run_mp_process_helper(
         else:
             result = fn(**kwargs)
     except Exception as e:
-        # Defer exceptions until connection is closed
-        # to prevent parent connection from hanging
+        # Handle exception in parent
         error = e
-        pass
-    if conn:
+        if conn:
+            conn.send(error)
+            conn.close()
+    if conn and not error:
         conn.send(result)
         conn.close()
-    if error:
-        raise error
+    return result
 
 
 def run_mp_process(
@@ -197,6 +197,8 @@ def run_mp_process(
     if venv_folder:
         # Reset executable
         multiprocessing.set_executable(sys.executable)
+    if isinstance(output, Exception):
+        raise output
     return output
 
 
