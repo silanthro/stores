@@ -13,6 +13,7 @@ from stores.index_utils import (
     install_venv_deps,
     run_mp_process,
     wrap_remote_tool,
+    wrap_tool,
 )
 from stores.parsing import llm_parse_json
 from stores.tools import DEFAULT_TOOLS, REPLY
@@ -58,7 +59,7 @@ def load_remote_index(index_id: str, branch_or_commit: str | None = None):
 
 def load_local_index(index_path: str):
     tools = get_index_tools(index_path)
-    return tools
+    return [wrap_tool(t) for t in tools]
 
 
 class Index(BaseModel):
@@ -112,7 +113,7 @@ class Index(BaseModel):
                     for t in loaded_index:
                         self._add_tool(t, index_name)
             elif isinstance(tool, Callable):
-                self._add_tool(tool, "local")
+                self._add_tool(wrap_tool(tool), "local")
 
     def _add_tool(self, tool: Callable, index: str = "local"):
         if ":" in tool.__name__ and tool.__name__ in self.tools_dict:
