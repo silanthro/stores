@@ -1,5 +1,6 @@
 import logging
 import venv
+from pathlib import Path
 from typing import Callable
 
 from git import Repo
@@ -69,7 +70,7 @@ class Index(BaseModel):
 
     def __init__(
         self,
-        tools: list[Callable | str] | None = None,
+        tools: list[Callable | str | Path] | None = None,
         env_vars: dict | None = None,
     ):
         super().__init__(
@@ -84,11 +85,11 @@ class Index(BaseModel):
         tools.append(REPLY)
 
         for tool in tools:
-            if isinstance(tool, str):
-                index_name = tool
+            if isinstance(tool, (str, Path)):
+                index_name = Path(tool)
                 loaded_index = None
                 # Load local index
-                if index_name.startswith(".") or index_name.startswith("/"):
+                if index_name.exists():
                     try:
                         loaded_index = load_local_index(index_name)
                         self._index_paths[index_name] = index_name
@@ -96,8 +97,8 @@ class Index(BaseModel):
                         logger.warning(
                             f'Unable to load index "{index_name}"', exc_info=True
                         )
-                # Load remote index
-                else:
+                if loaded_index is None:
+                    # Load remote index
                     try:
                         branch_or_commit = None
                         if ":" in index_name:
@@ -106,10 +107,14 @@ class Index(BaseModel):
                         self._index_paths[index_name] = str(CACHE_DIR / index_name)
                     except Exception:
                         logger.warning(
-                            f'Unable to load index "{index_name}"\nIf this is a local index, index string should start with "." or "/"',
+                            f'Unable to load index "{index_name}"\nIf this is a local index, make sure it can be found as a directory',
                             exc_info=True,
                         )
-                if loaded_index:
+                if loaded_index is None:
+                    raise ValueError(
+                        f'Unable to load index "{index_name}"\nIf this is a local index, make sure it can be found as a directory'
+                    )
+                else:
                     for t in loaded_index:
                         self._add_tool(t, index_name)
             elif isinstance(tool, Callable):

@@ -1,6 +1,7 @@
 import asyncio
 import importlib.util
 import inspect
+import logging
 import multiprocessing
 import os
 import subprocess
@@ -9,10 +10,14 @@ import sysconfig
 from inspect import Parameter
 from multiprocessing.connection import Connection
 from pathlib import Path
-from typing import Callable, TypedDict
+from typing import Awaitable, Callable, TypedDict
 
 import yaml
 from makefun import create_function
+
+logging.basicConfig()
+logger = logging.getLogger("stores.index_utils")
+logger.setLevel(logging.INFO)
 
 # TODO: CACHE_DIR might resolve differently
 CACHE_DIR = Path(".tools")
@@ -56,7 +61,8 @@ def get_index_signatures(index_folder: str | Path) -> list[ToolMetadata]:
             "name": t.__name__,
             # TODO: Handle custom types
             "signature": t.__name__.split(".")[-1] + str(inspect.signature(t)),
-            "docs": inspect.getdoc(t),
+            "doc": inspect.getdoc(t),
+            "async": inspect.iscoroutinefunction(t),
         }
         for t in tools
     ]
@@ -90,8 +96,8 @@ def get_index_tools(index_folder: str | Path) -> list[Callable]:
     return tools
 
 
-def install_venv_deps(index_folder: str | Path):
-    lib_paths = [
+def install_venv_deps(index_folder: str | Path, lib_paths: list[str] | None = None):
+    lib_paths = lib_paths or [
         sysconfig.get_path("platlib"),
         sysconfig.get_path("purelib"),
     ]
@@ -150,15 +156,15 @@ def run_mp_process_helper(
         else:
             result = fn(**kwargs)
     except Exception as e:
-        # Defer exceptions until connection is closed
-        # to prevent parent connection from hanging
+        # Handle exception in parent
         error = e
-        pass
-    if conn:
+        if conn:
+            conn.send(error)
+            conn.close()
+    if conn and not error:
         conn.send(result)
         conn.close()
-    if error:
-        raise error
+    return result
 
 
 def run_mp_process(
@@ -167,13 +173,12 @@ def run_mp_process(
     env_vars: dict | None = None,
     venv_folder: str | Path | None = None,
 ):
+    start_method = None
     if venv_folder:
         venv_folder = Path(venv_folder)
         # Set appropriate executable
-        try:
-            multiprocessing.set_start_method("spawn")
-        except RuntimeError:
-            pass
+        start_method = multiprocessing.get_start_method()
+        multiprocessing.set_start_method("spawn", force=True)
         multiprocessing.set_executable(venv_folder / "bin/python")
 
     parent_conn, child_conn = multiprocessing.Pipe()
@@ -191,7 +196,11 @@ def run_mp_process(
     output = parent_conn.recv()
     if venv_folder:
         # Reset executable
+        if start_method:
+            multiprocessing.set_start_method(start_method, force=True)
         multiprocessing.set_executable(sys.executable)
+    if isinstance(output, Exception):
+        raise output
     return output
 
 
@@ -236,7 +245,6 @@ def wrap_remote_tool(
     env_vars: dict | None = None,
 ):
     # TODO: Handle misc issues
-    # - Arg defaults for Gemini
     # - . in function name
     def func_handler(*args, **kwargs):
         # Run tool with run_mp_process
@@ -252,10 +260,24 @@ def wrap_remote_tool(
             venv_folder=venv_folder,
         )
 
+    async def async_func_handler(*args, **kwargs):
+        # Run tool with run_mp_process
+        return run_mp_process(
+            fn=run_remote_tool,
+            kwargs={
+                "tool_id": tool_metadata["name"],
+                "index_folder": index_folder,
+                "args": args,
+                "kwargs": kwargs,
+            },
+            env_vars=env_vars,
+            venv_folder=venv_folder,
+        )
+
     func = create_function(
         tool_metadata["signature"],
-        func_handler,
-        doc=tool_metadata.get("docs"),
+        async_func_handler if tool_metadata.get("async") else func_handler,
+        doc=tool_metadata.get("doc"),
     )
     func = wrap_tool(func)
     func.__name__ = tool_metadata["name"]
@@ -263,7 +285,7 @@ def wrap_remote_tool(
 
 
 # Wrap tool to make it compatible with LLM libraries
-def wrap_tool(tool: Callable):
+def wrap_tool(tool: Callable | Awaitable):
     # Retrieve default arguments
     sig = inspect.signature(tool)
     new_args = []
@@ -301,9 +323,17 @@ def wrap_tool(tool: Callable):
                 kwargs[kw] = default_args.get(kw)
         return tool(*args, **kwargs)
 
+    async def async_wrapper(*args, **kwargs):
+        # Inject default values within wrapper
+        for kw, kwarg in kwargs.items():
+            if kwarg is None:
+                kwargs[kw] = default_args.get(kw)
+        return await tool(*args, **kwargs)
+
     wrapped_tool = create_function(
-        tool.__name__ + str(new_signature),
-        wrapper,
+        tool.__name__.split(".")[-1] + str(new_signature),
+        async_wrapper if inspect.iscoroutinefunction(tool) else wrapper,
         doc=inspect.getdoc(tool),
     )
+    wrapped_tool.__name__ = tool.__name__
     return wrapped_tool
