@@ -1,6 +1,7 @@
 import asyncio
 import importlib.util
 import inspect
+import logging
 import multiprocessing
 import os
 import subprocess
@@ -13,6 +14,10 @@ from typing import Callable, TypedDict
 
 import yaml
 from makefun import create_function
+
+logging.basicConfig()
+logger = logging.getLogger("stores.index_utils")
+logger.setLevel(logging.INFO)
 
 # TODO: CACHE_DIR might resolve differently
 CACHE_DIR = Path(".tools")
