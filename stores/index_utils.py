@@ -10,7 +10,7 @@ import sysconfig
 from inspect import Parameter
 from multiprocessing.connection import Connection
 from pathlib import Path
-from typing import Callable, TypedDict
+from typing import Awaitable, Callable, TypedDict
 
 import yaml
 from makefun import create_function
@@ -61,7 +61,8 @@ def get_index_signatures(index_folder: str | Path) -> list[ToolMetadata]:
             "name": t.__name__,
             # TODO: Handle custom types
             "signature": t.__name__.split(".")[-1] + str(inspect.signature(t)),
-            "docs": inspect.getdoc(t),
+            "doc": inspect.getdoc(t),
+            "async": inspect.iscoroutinefunction(t),
         }
         for t in tools
     ]
@@ -244,7 +245,6 @@ def wrap_remote_tool(
     env_vars: dict | None = None,
 ):
     # TODO: Handle misc issues
-    # - Arg defaults for Gemini
     # - . in function name
     def func_handler(*args, **kwargs):
         # Run tool with run_mp_process
@@ -260,10 +260,24 @@ def wrap_remote_tool(
             venv_folder=venv_folder,
         )
 
+    async def async_func_handler(*args, **kwargs):
+        # Run tool with run_mp_process
+        return run_mp_process(
+            fn=run_remote_tool,
+            kwargs={
+                "tool_id": tool_metadata["name"],
+                "index_folder": index_folder,
+                "args": args,
+                "kwargs": kwargs,
+            },
+            env_vars=env_vars,
+            venv_folder=venv_folder,
+        )
+
     func = create_function(
         tool_metadata["signature"],
-        func_handler,
-        doc=tool_metadata.get("docs"),
+        async_func_handler if tool_metadata.get("async") else func_handler,
+        doc=tool_metadata.get("doc"),
     )
     func = wrap_tool(func)
     func.__name__ = tool_metadata["name"]
@@ -271,7 +285,7 @@ def wrap_remote_tool(
 
 
 # Wrap tool to make it compatible with LLM libraries
-def wrap_tool(tool: Callable):
+def wrap_tool(tool: Callable | Awaitable):
     # Retrieve default arguments
     sig = inspect.signature(tool)
     new_args = []
@@ -309,9 +323,17 @@ def wrap_tool(tool: Callable):
                 kwargs[kw] = default_args.get(kw)
         return tool(*args, **kwargs)
 
+    async def async_wrapper(*args, **kwargs):
+        # Inject default values within wrapper
+        for kw, kwarg in kwargs.items():
+            if kwarg is None:
+                kwargs[kw] = default_args.get(kw)
+        return await tool(*args, **kwargs)
+
     wrapped_tool = create_function(
-        tool.__name__ + str(new_signature),
-        wrapper,
+        tool.__name__.split(".")[-1] + str(new_signature),
+        async_wrapper if inspect.iscoroutinefunction(tool) else wrapper,
         doc=inspect.getdoc(tool),
     )
+    wrapped_tool.__name__ = tool.__name__
     return wrapped_tool
