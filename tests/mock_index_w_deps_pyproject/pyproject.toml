@@ -1,0 +1,10 @@
+[project]
+name = "mock_index"
+version = "0.1.0"
+dependencies = [
+    "pip-install-test==0.5",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
