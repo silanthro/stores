@@ -89,7 +89,7 @@ def llm_parse_json(text: str, keys: list[str] = None, autoescape=True):
                 continue
 
     if result_json:
-        result_json = fuzzy_match_keys(result_json)
+        result_json = fuzzy_match_keys(result_json, keys)
         return convert_attributed_container(result_json)
 
     error_message = f"Failed to parse JSON from text {text}"
@@ -112,7 +112,9 @@ def escape_quotes(json_str: str, keys: list[str] = None):
         candidates = list(combinations(quote_pos, n))
         for candidate in candidates:
             new_json_str = ""
-            for start, end in zip([0, *candidate], [*candidate, len(json_str)]):
+            for start, end in zip(
+                [0, *candidate], [*candidate, len(json_str)], strict=True
+            ):
                 new_json_str += json_str[start:end] + "\\"
             new_json_str = new_json_str[:-1]
             try:
@@ -132,10 +134,12 @@ def escape_quotes(json_str: str, keys: list[str] = None):
 def fuzzy_match_keys(json_dict: dict, gold_keys: list[str] = None, min_score=80):
     if not gold_keys:
         return json_dict
-    for key in json_dict.copy():
+    keys = list(json_dict.keys())
+    for key in keys:
         closest_key, score = process.extractOne(key, gold_keys)
         if score == 100:
             continue
         elif score >= min_score:
             json_dict[closest_key] = json_dict[key]
+            del json_dict[key]
     return json_dict
