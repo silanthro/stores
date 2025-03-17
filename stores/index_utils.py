@@ -172,13 +172,12 @@ def run_mp_process(
     env_vars: dict | None = None,
     venv_folder: str | Path | None = None,
 ):
+    start_method = None
     if venv_folder:
         venv_folder = Path(venv_folder)
         # Set appropriate executable
-        try:
-            multiprocessing.set_start_method("spawn")
-        except RuntimeError:
-            pass
+        start_method = multiprocessing.get_start_method()
+        multiprocessing.set_start_method("spawn", force=True)
         multiprocessing.set_executable(venv_folder / "bin/python")
 
     parent_conn, child_conn = multiprocessing.Pipe()
@@ -196,6 +195,8 @@ def run_mp_process(
     output = parent_conn.recv()
     if venv_folder:
         # Reset executable
+        if start_method:
+            multiprocessing.set_start_method(start_method, force=True)
         multiprocessing.set_executable(sys.executable)
     if isinstance(output, Exception):
         raise output
