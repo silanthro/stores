@@ -96,8 +96,8 @@ def get_index_tools(index_folder: str | Path) -> list[Callable]:
     return tools
 
 
-def install_venv_deps(index_folder: str | Path):
-    lib_paths = [
+def install_venv_deps(index_folder: str | Path, lib_paths: list[str] | None = None):
+    lib_paths = lib_paths or [
         sysconfig.get_path("platlib"),
         sysconfig.get_path("purelib"),
     ]
