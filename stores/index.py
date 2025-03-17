@@ -86,10 +86,10 @@ class Index(BaseModel):
 
         for tool in tools:
             if isinstance(tool, (str, Path)):
-                index_name = Path(tool)
+                index_name = tool
                 loaded_index = None
                 # Load local index
-                if index_name.exists():
+                if Path(index_name).exists():
                     try:
                         loaded_index = load_local_index(index_name)
                         self._index_paths[index_name] = index_name
@@ -97,7 +97,7 @@ class Index(BaseModel):
                         logger.warning(
                             f'Unable to load index "{index_name}"', exc_info=True
                         )
-                if loaded_index is None:
+                if loaded_index is None and isinstance(index_name, str):
                     # Load remote index
                     try:
                         branch_or_commit = None
