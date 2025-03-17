@@ -1,3 +1,5 @@
+import asyncio
+import inspect
 import logging
 import venv
 from pathlib import Path
@@ -121,7 +123,8 @@ class Index(BaseModel):
                 self._add_tool(wrap_tool(tool), "local")
 
     def _add_tool(self, tool: Callable, index: str = "local"):
-        if ":" in tool.__name__ and tool.__name__ in self.tools_dict:
+        # if ":" in tool.__name__ and tool.__name__ in self.tools_dict:
+        if tool.__name__ in self.tools_dict:
             raise ValueError(f"Duplicate tool - {tool.__name__}")
 
         # tool.__name__ = f"{index}:{tool.__name__}"
@@ -148,10 +151,15 @@ class Index(BaseModel):
                 toolname = matching_tools[0]
 
         if self.tools_dict.get(toolname) is None:
-            raise ValueError("No tool matching '{toolname}'")
+            raise ValueError(f"No tool matching '{toolname}'")
 
         tool = self.tools_dict[toolname]
-        return tool(**kwargs)
+        if inspect.iscoroutinefunction(tool):
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            return loop.run_until_complete(tool(**kwargs))
+        else:
+            return tool(**kwargs)
 
     def parse_and_execute(self, msg: str):
         toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
