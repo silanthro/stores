@@ -1,0 +1,3 @@
+tools:
+- mock_index.get_package
+- mock_index.async_get_package
