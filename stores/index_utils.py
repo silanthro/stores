@@ -255,7 +255,7 @@ def wrap_remote_tool(
     func = create_function(
         tool_metadata["signature"],
         func_handler,
-        docs=tool_metadata.get("docs"),
+        doc=tool_metadata.get("docs"),
     )
     func = wrap_tool(func)
     func.__name__ = tool_metadata["name"]
@@ -304,6 +304,6 @@ def wrap_tool(tool: Callable):
     wrapped_tool = create_function(
         tool.__name__ + str(new_signature),
         wrapper,
-        docs=inspect.getdoc(tool),
+        doc=inspect.getdoc(tool),
     )
     return wrapped_tool
