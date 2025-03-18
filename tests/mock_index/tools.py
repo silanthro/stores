@@ -11,6 +11,15 @@ def foo(bar: str):
     return bar
 
 
+def foo_w_return_type(bar: str) -> str:
+    """
+    Documentation of foo_w_return_type
+    Args:
+        bar (str): Sample text
+    """
+    return bar
+
+
 async def async_foo(bar: str):
     """
     Documentation of async_foo

@@ -34,6 +34,7 @@ def test_load_index(local_index_folder):
     index = Index([local_index_folder])
     assert [t.__name__ for t in index.tools] == [
         "tools.foo",
+        "tools.foo_w_return_type",
         "tools.async_foo",
         "tools.enum_input",
         "tools.typed_dict_input",
@@ -43,6 +44,7 @@ def test_load_index(local_index_folder):
     # Test tool execution
     sample_inputs = {
         "tools.foo": "hello world",
+        "tools.foo_w_return_type": "hello world",
         "tools.async_foo": "hello world",
         "tools.enum_input": "red",
         "tools.typed_dict_input": {"name": "Tiger", "num_legs": 4},
