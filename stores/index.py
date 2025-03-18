@@ -43,26 +43,35 @@ def load_remote_index(index_id: str, branch_or_commit: str | None = None):
         venv_folder=venv_folder,
     )
 
-    tools = []
     index_signatures = run_mp_process(
         fn=get_index_signatures,
         kwargs={"index_folder": index_folder},
         venv_folder=venv_folder,
     )
-    tools = [
-        wrap_remote_tool(
-            s,
-            venv_folder,
-            index_folder,
-        )
-        for s in index_signatures
-    ]
+    tools = []
+    for sig in index_signatures:
+        try:
+            tools.append(wrap_remote_tool(sig, venv_folder, index_folder))
+        except Exception:
+            logger.warning(
+                f'Loading of tool {sig["name"]} in index "{index_id}" failed, excluding tool from index',
+                exc_info=True,
+            )
     return tools
 
 
 def load_local_index(index_path: str):
-    tools = get_index_tools(index_path)
-    return [wrap_tool(t) for t in tools]
+    index_tools = get_index_tools(index_path)
+    tools = []
+    for tool in index_tools:
+        try:
+            tools.append(wrap_tool(tool))
+        except Exception:
+            logger.warning(
+                f'Loading of tool {tool.__name__} in index "{index_path}" failed, excluding tool from index',
+                exc_info=True,
+            )
+    return tools
 
 
 class Index(BaseModel):
@@ -113,19 +122,23 @@ class Index(BaseModel):
                             exc_info=True,
                         )
                 if loaded_index is None:
-                    raise ValueError(
-                        f'Unable to load index "{index_name}"\nIf this is a local index, make sure it can be found as a directory'
+                    logger.warning(
+                        f'Unable to load index "{index_name}", excluding index',
                     )
                 else:
                     for t in loaded_index:
                         self._add_tool(t, index_name)
             elif isinstance(tool, Callable):
                 self._add_tool(wrap_tool(tool), "local")
+        if len(tools) == 0:
+            logger.warning("No tools loaded")
 
     def _add_tool(self, tool: Callable, index: str = "local"):
         # if ":" in tool.__name__ and tool.__name__ in self.tools_dict:
         if tool.__name__ in self.tools_dict:
-            raise ValueError(f"Duplicate tool - {tool.__name__}")
+            logger.warning(
+                f"Duplicate tool - {tool.__name__}, excluding tool from index"
+            )
 
         # tool.__name__ = f"{index}:{tool.__name__}"
 
