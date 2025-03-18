@@ -2,7 +2,9 @@ import inspect
 import logging
 import shutil
 import venv
+from enum import Enum
 from pathlib import Path
+from typing import Optional, TypedDict
 
 import pytest
 
@@ -65,24 +67,6 @@ def foo(bar: str):
     return bar
 
 
-def foo_w_default(bar: str = "test"):
-    """
-    Documentation of foo_w_default
-    Args:
-        bar (str): Sample text
-    """
-    return bar
-
-
-def foo_w_default_notype(bar="test"):
-    """
-    Documentation of foo_w_default_notype
-    Args:
-        bar (str): Sample text
-    """
-    return bar
-
-
 async def async_foo(bar: str):
     """
     Documentation of async_foo
@@ -113,19 +97,106 @@ def sample_tool(request):
     yield function_metadata
 
 
+def foo_w_default(bar: str = "test"):
+    """
+    Documentation of foo_w_default
+    Args:
+        bar (str): Sample text
+    """
+    return bar
+
+
+def foo_w_default_notype(bar="test"):
+    """
+    Documentation of foo_w_default_notype
+    Args:
+        bar (str): Sample text
+    """
+    return bar
+
+
+def foo_w_optional(bar: Optional[str]):
+    """
+    Documentation of foo_w_optional
+    Args:
+        bar (Optional[str]): Sample text
+    """
+    bar = bar or "test"
+    return bar
+
+
+def foo_w_optional_and_default(bar: Optional[str] = "test"):
+    """
+    Documentation of foo_w_optional
+    Args:
+        bar (Optional[str]): Sample text
+    """
+    return bar
+
+
 @pytest.fixture(
     params=[
         {
             "function": foo_w_default,
-            "signature": "(bar: None | str = None)",
+            "signature": "(bar: Optional[str] = None)",
         },
         {
             "function": foo_w_default_notype,
-            "signature": "(bar: None | str = None)",
+            "signature": "(bar: Optional[str] = None)",
+        },
+        {
+            "function": foo_w_optional,
+            "signature": "(bar: Optional[str] = None)",
+        },
+        {
+            "function": foo_w_optional_and_default,
+            "signature": "(bar: Optional[str] = None)",
         },
     ],
 )
 def sample_tool_w_defaults(request):
+    function_metadata = {
+        **request.param,
+        "name": request.param["function"].__name__,
+        "doc": inspect.getdoc(request.param["function"]),
+    }
+    yield function_metadata
+
+
+class Animal(TypedDict):
+    name: str
+    num_legs: int
+
+
+def fn_with_typed_dict(animal: Animal):
+    return animal
+
+
+class Color(Enum):
+    RED = 1
+    GREEN = 2
+    BLUE = 3
+
+
+def fn_with_enum(color: Color):
+    return color
+
+
+@pytest.fixture(
+    params=[
+        {
+            "function": fn_with_typed_dict,
+            "signature": "(animal: conftest.Animal)",
+            "sample_input": {"name": "Tiger", "num_legs": 4},
+        },
+        {
+            "function": fn_with_enum,
+            "signature": "(color: conftest.Color)",
+            "sample_input": 1,
+        },
+    ],
+)
+def complex_function(request):
     function_metadata = {
         **request.param,
         "name": request.param["function"].__name__,

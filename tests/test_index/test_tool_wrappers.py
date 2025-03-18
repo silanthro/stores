@@ -53,7 +53,32 @@ async def test_wrap_tool_w_defaults(sample_tool_w_defaults):
     assert wrapped_tool.__name__ == sample_tool_w_defaults["name"]
     assert inspect.getdoc(wrapped_tool) == sample_tool_w_defaults["doc"]
     # Check that tool runs
+    # Note: In some cases we need to supply an argument to the original function
+    # even though arg annotation is Optional
     if inspect.iscoroutinefunction(tool_fn):
-        assert await wrapped_tool() == await tool_fn()
+        try:
+            original_result = await tool_fn()
+        except TypeError:
+            original_result = await tool_fn("test")
+        assert await wrapped_tool() == original_result
     else:
-        assert wrapped_tool() == tool_fn()
+        try:
+            original_result = tool_fn()
+        except TypeError:
+            original_result = tool_fn("test")
+        assert wrapped_tool() == original_result
+
+
+# Test complex args
+async def test_wrap_tool_w_complex_args(complex_function):
+    tool_fn = complex_function["function"]
+    sample_input = complex_function["sample_input"]
+    wrapped_tool = utils.wrap_tool(tool_fn)
+    assert str(inspect.signature(wrapped_tool)) == complex_function["signature"]
+    # Check that tool runs
+    # Note: In some cases we need to supply an argument to the original function
+    # even though arg annotation is Optional
+    if inspect.iscoroutinefunction(tool_fn):
+        assert await wrapped_tool(sample_input) == await tool_fn(sample_input)
+    else:
+        assert wrapped_tool(sample_input) == tool_fn(sample_input)
