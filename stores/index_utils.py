@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import importlib.util
 import inspect
 import logging
@@ -14,8 +15,6 @@ from types import NoneType
 from typing import (
     Awaitable,
     Callable,
-    Dict,
-    List,
     Optional,
     TypedDict,
     Union,
@@ -261,11 +260,6 @@ def wrap_remote_tool(
     """
     # Explicitly import some typing Types to prevent create_function
     # from running into NameError
-    _support_types = [
-        Dict,
-        List,
-        Optional,
-    ]
 
     # TODO: Handle misc issues
     # - . in function name
@@ -314,13 +308,6 @@ def wrap_tool(tool: Callable | Awaitable):
     If there are any default args, we set default value to None
     and inject the correct default value at runtime.
     """
-    # Explicitly import some typing Types to prevent create_function
-    # from running into NameError
-    _support_types = [
-        Dict,
-        List,
-        Optional,
-    ]
     # Retrieve default arguments
     sig = inspect.signature(tool)
     new_args = []
@@ -332,6 +319,7 @@ def wrap_tool(tool: Callable | Awaitable):
             # TODO: We might want to remove the Optional tag instead since no
             # default value is supplied
             if get_origin(argtype) == Union and NoneType in get_args(argtype):
+                default_args[argname] = None
                 new_args.append(
                     arg.replace(
                         default=None,
@@ -360,26 +348,29 @@ def wrap_tool(tool: Callable | Awaitable):
                     annotation=new_annotation,
                 )
             )
-    new_signature = sig.replace(parameters=new_args)
+    new_sig = sig.replace(parameters=new_args)
 
-    def wrapper(*args, **kwargs):
-        # Inject default values within wrapper
-        for kw, kwarg in kwargs.items():
-            if kwarg is None:
-                kwargs[kw] = default_args.get(kw)
-        return tool(*args, **kwargs)
+    if inspect.iscoroutinefunction(tool):
 
-    async def async_wrapper(*args, **kwargs):
-        # Inject default values within wrapper
-        for kw, kwarg in kwargs.items():
-            if kwarg is None:
-                kwargs[kw] = default_args.get(kw)
-        return await tool(*args, **kwargs)
+        async def wrapper(*args, **kwargs):
+            # Inject default values within wrapper
+            for kw, kwarg in kwargs.items():
+                if kwarg is None:
+                    kwargs[kw] = default_args.get(kw)
+            return await tool(*args, **kwargs)
+    else:
 
-    wrapped_tool = create_function(
-        tool.__name__.split(".")[-1] + str(new_signature),
-        async_wrapper if inspect.iscoroutinefunction(tool) else wrapper,
-        doc=inspect.getdoc(tool),
-    )
-    wrapped_tool.__name__ = tool.__name__
-    return wrapped_tool
+        def wrapper(*args, **kwargs):
+            # Inject default values within wrapper
+            for kw, kwarg in kwargs.items():
+                if kwarg is None:
+                    kwargs[kw] = default_args.get(kw)
+            for default_kw, default_kwarg in default_args.items():
+                if default_kw not in kwargs:
+                    kwargs[default_kw] = default_kwarg
+            return tool(*args, **kwargs)
+
+    functools.update_wrapper(wrapper, tool)
+    wrapper.__signature__ = new_sig  # Set the new function signature
+
+    return wrapper
