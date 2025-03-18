@@ -14,6 +14,7 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from types import NoneType
 from typing import (
+    Any,
     Awaitable,
     Callable,
     Optional,
@@ -38,8 +39,10 @@ TOOLS_CONFIG_FILENAME = "TOOLS.yml"
 
 class ToolMetadata(TypedDict):
     name: str
-    signature: str
-    docs: str
+    params: list[Any]
+    doc: str
+    is_async: bool
+    return_type: Any
 
 
 def get_param_type(param_type: type):
@@ -131,7 +134,7 @@ def get_index_signatures(index_folder: str | Path) -> list[ToolMetadata]:
                 "name": tool.__name__,
                 "params": params,
                 "doc": inspect.getdoc(tool),
-                "async": inspect.iscoroutinefunction(tool),
+                "is_async": inspect.iscoroutinefunction(tool),
                 "return_type": return_type,
             }
         )
@@ -385,7 +388,7 @@ def wrap_remote_tool(
     signature = inspect.Signature(params, return_annotation=return_type)
     func = create_function(
         signature,
-        async_func_handler if tool_metadata.get("async") else func_handler,
+        async_func_handler if tool_metadata.get("is_async") else func_handler,
         doc=tool_metadata.get("doc"),
     )
     func = wrap_tool(func)

@@ -16,7 +16,7 @@ def test_wrap_remote_tool(sample_tool):
         "name": sample_tool["name"],
         "params": sample_tool["params"],
         "doc": sample_tool["doc"],
-        "async": inspect.iscoroutinefunction(tool_fn),
+        "is_async": inspect.iscoroutinefunction(tool_fn),
     }
     wrapped_tool = utils.wrap_remote_tool(
         tool_metadata,
@@ -42,7 +42,7 @@ def test_wrap_remote_tool_complex(complex_function):
         "name": tool_fn.__name__,
         "params": params,
         "doc": inspect.getdoc(tool_fn),
-        "async": inspect.iscoroutinefunction(tool_fn),
+        "is_async": inspect.iscoroutinefunction(tool_fn),
         "return_type": return_type,
     }
     wrapped_tool = utils.wrap_remote_tool(

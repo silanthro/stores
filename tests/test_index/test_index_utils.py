@@ -23,7 +23,7 @@ def test_get_index_signatures(local_index_folder):
             ],
             "return_type": Parameter.empty,
             "doc": "Documentation of foo\nArgs:\n    bar (str): Sample text",
-            "async": False,
+            "is_async": False,
         },
         {
             "name": "tools.foo_w_return_type",
@@ -37,7 +37,7 @@ def test_get_index_signatures(local_index_folder):
             ],
             "return_type": {"type": str},
             "doc": "Documentation of foo_w_return_type\nArgs:\n    bar (str): Sample text",
-            "async": False,
+            "is_async": False,
         },
         {
             "name": "tools.async_foo",
@@ -51,7 +51,7 @@ def test_get_index_signatures(local_index_folder):
             ],
             "return_type": Parameter.empty,
             "doc": "Documentation of async_foo\nArgs:\n    bar (str): Sample text",
-            "async": True,
+            "is_async": True,
         },
         {
             "name": "tools.enum_input",
@@ -71,7 +71,7 @@ def test_get_index_signatures(local_index_folder):
             ],
             "return_type": Parameter.empty,
             "doc": None,
-            "async": False,
+            "is_async": False,
         },
         {
             "name": "tools.typed_dict_input",
@@ -90,7 +90,7 @@ def test_get_index_signatures(local_index_folder):
             ],
             "return_type": Parameter.empty,
             "doc": None,
-            "async": False,
+            "is_async": False,
         },
         {
             "name": "hello.world",
@@ -104,7 +104,7 @@ def test_get_index_signatures(local_index_folder):
             ],
             "return_type": Parameter.empty,
             "doc": None,
-            "async": False,
+            "is_async": False,
         },
     ]
 
