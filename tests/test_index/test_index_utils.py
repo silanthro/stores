@@ -21,7 +21,22 @@ def test_get_index_signatures(local_index_folder):
                     "default": Parameter.empty,
                 }
             ],
+            "return_type": Parameter.empty,
             "doc": "Documentation of foo\nArgs:\n    bar (str): Sample text",
+            "async": False,
+        },
+        {
+            "name": "tools.foo_w_return_type",
+            "params": [
+                {
+                    "name": "bar",
+                    "type": str,
+                    "kind": Parameter.POSITIONAL_OR_KEYWORD,
+                    "default": Parameter.empty,
+                }
+            ],
+            "return_type": {"type": str},
+            "doc": "Documentation of foo_w_return_type\nArgs:\n    bar (str): Sample text",
             "async": False,
         },
         {
@@ -34,6 +49,7 @@ def test_get_index_signatures(local_index_folder):
                     "default": Parameter.empty,
                 }
             ],
+            "return_type": Parameter.empty,
             "doc": "Documentation of async_foo\nArgs:\n    bar (str): Sample text",
             "async": True,
         },
@@ -42,6 +58,7 @@ def test_get_index_signatures(local_index_folder):
             "params": [
                 {
                     "name": "bar",
+                    "type_name": "Color",
                     "type": "enum",
                     "enum": {
                         "RED": "red",
@@ -52,6 +69,7 @@ def test_get_index_signatures(local_index_folder):
                     "default": Parameter.empty,
                 }
             ],
+            "return_type": Parameter.empty,
             "doc": None,
             "async": False,
         },
@@ -60,6 +78,7 @@ def test_get_index_signatures(local_index_folder):
             "params": [
                 {
                     "name": "bar",
+                    "type_name": "Animal",
                     "type": "object",
                     "properties": {
                         "name": str,
@@ -69,6 +88,7 @@ def test_get_index_signatures(local_index_folder):
                     "default": Parameter.empty,
                 }
             ],
+            "return_type": Parameter.empty,
             "doc": None,
             "async": False,
         },
@@ -82,6 +102,7 @@ def test_get_index_signatures(local_index_folder):
                     "default": Parameter.empty,
                 }
             ],
+            "return_type": Parameter.empty,
             "doc": None,
             "async": False,
         },
@@ -92,6 +113,7 @@ def test_get_index_tools(local_index_folder):
     tools = utils.get_index_tools(local_index_folder)
     assert [t.__name__ for t in tools] == [
         "tools.foo",
+        "tools.foo_w_return_type",
         "tools.async_foo",
         "tools.enum_input",
         "tools.typed_dict_input",
@@ -103,6 +125,7 @@ def test_run_remote_tool(local_index_folder):
     tools = utils.get_index_tools(local_index_folder)
     sample_inputs = {
         "tools.foo": "hello world",
+        "tools.foo_w_return_type": "hello world",
         "tools.async_foo": "hello world",
         "tools.enum_input": "red",
         "tools.typed_dict_input": {"name": "Tiger", "num_legs": 4},

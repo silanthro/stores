@@ -90,6 +90,7 @@ async def async_foo(bar: str):
                     "default": Parameter.empty,
                 }
             ],
+            "return_type": Parameter.empty,
         },
         {
             "function": async_foo,
@@ -102,6 +103,7 @@ async def async_foo(bar: str):
                     "default": Parameter.empty,
                 }
             ],
+            "return_type": Parameter.empty,
         },
     ],
 )
@@ -185,7 +187,7 @@ class Animal(TypedDict):
     num_legs: int
 
 
-def fn_with_typed_dict(animal: Animal):
+def fn_with_typed_dict(animal: Animal) -> Animal:
     return animal
 
 
@@ -195,7 +197,7 @@ class Color(Enum):
     BLUE = 3
 
 
-def fn_with_enum(color: Color):
+def fn_with_enum(color: Color) -> Color:
     return color
 
 
@@ -203,12 +205,14 @@ def fn_with_enum(color: Color):
     params=[
         {
             "function": fn_with_typed_dict,
-            "signature": "(animal: conftest.Animal)",
+            "signature": "(animal: conftest.Animal) -> conftest.Animal",
+            "remote_signature": "(animal: stores.index_utils.Animal) -> stores.index_utils.Animal",
             "sample_input": {"name": "Tiger", "num_legs": 4},
         },
         {
             "function": fn_with_enum,
-            "signature": "(color: conftest.Color)",
+            "signature": "(color: conftest.Color) -> conftest.Color",
+            "remote_signature": "(color: stores.index_utils.Color) -> stores.index_utils.Color",
             "sample_input": 1,
         },
     ],

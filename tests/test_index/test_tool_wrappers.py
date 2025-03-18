@@ -1,5 +1,6 @@
 import inspect
 import logging
+from inspect import Parameter
 
 import stores.index_utils as utils
 
@@ -25,6 +26,33 @@ def test_wrap_remote_tool(sample_tool):
     assert str(inspect.signature(wrapped_tool)) == sample_tool["signature"]
     assert wrapped_tool.__name__ == sample_tool["name"]
     assert inspect.getdoc(wrapped_tool) == sample_tool["doc"]
+    assert inspect.iscoroutinefunction(wrapped_tool) == inspect.iscoroutinefunction(
+        tool_fn
+    )
+
+
+def test_wrap_remote_tool_complex(complex_function):
+    tool_fn = complex_function["function"]
+    sig = inspect.signature(tool_fn)
+    params = [utils.get_param_signature(arg) for arg in sig.parameters.values()]
+    return_type = inspect.signature(tool_fn).return_annotation
+    if return_type != Parameter.empty:
+        return_type = utils.get_param_type(return_type)
+    tool_metadata = {
+        "name": tool_fn.__name__,
+        "params": params,
+        "doc": inspect.getdoc(tool_fn),
+        "async": inspect.iscoroutinefunction(tool_fn),
+        "return_type": return_type,
+    }
+    wrapped_tool = utils.wrap_remote_tool(
+        tool_metadata,
+        "./",
+        "./.venv",
+    )
+    assert str(inspect.signature(wrapped_tool)) == complex_function["remote_signature"]
+    assert wrapped_tool.__name__ == complex_function["name"]
+    assert inspect.getdoc(wrapped_tool) == complex_function["doc"]
     assert inspect.iscoroutinefunction(wrapped_tool) == inspect.iscoroutinefunction(
         tool_fn
     )

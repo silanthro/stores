@@ -43,12 +43,14 @@ async def test_remote_tool(remote_index_folder):
             "params": [],
             "doc": None,
             "async": False,
+            "return_type": Parameter.empty,
         },
         {
             "name": "mock_index.async_get_package",
             "params": [],
             "doc": None,
             "async": True,
+            "return_type": Parameter.empty,
         },
         {
             "name": "mock_index.enum_input",
@@ -57,6 +59,7 @@ async def test_remote_tool(remote_index_folder):
                     "name": "bar",
                     "kind": Parameter.POSITIONAL_OR_KEYWORD,
                     "type": "enum",
+                    "type_name": "Color",
                     "enum": {
                         "RED": "red",
                         "GREEN": "green",
@@ -67,6 +70,7 @@ async def test_remote_tool(remote_index_folder):
             ],
             "doc": None,
             "async": False,
+            "return_type": Parameter.empty,
         },
         {
             "name": "mock_index.typed_dict_input",
@@ -75,6 +79,7 @@ async def test_remote_tool(remote_index_folder):
                     "name": "bar",
                     "kind": Parameter.POSITIONAL_OR_KEYWORD,
                     "type": "object",
+                    "type_name": "Animal",
                     "properties": {
                         "name": str,
                         "num_legs": int,
@@ -84,6 +89,7 @@ async def test_remote_tool(remote_index_folder):
             ],
             "doc": None,
             "async": False,
+            "return_type": Parameter.empty,
         },
     ]
     # Test wrap_remote_tool
@@ -108,17 +114,3 @@ async def test_remote_tool(remote_index_folder):
             assert await tool(**kwargs) == "pip_install_test"
         else:
             assert tool(**kwargs) == "pip_install_test"
-
-    # for tool_sig in signatures:
-    #     tool_output = utils.run_mp_process(
-    #         fn=utils.run_remote_tool,
-    #         kwargs={
-    #             "tool_id": tool_sig["name"],
-    #             "kwargs": {"animal": {"name": "Tiger", "num_legs": 4}}
-    #             if tool_sig["name"] == "mock_index.tool_w_typed_dict"
-    #             else None,
-    #             "index_folder": remote_index_folder,
-    #         },
-    #         venv_folder=venv_folder,
-    #     )
-    #     assert tool_output == "pip_install_test"
