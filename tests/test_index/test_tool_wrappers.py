@@ -13,7 +13,7 @@ def test_wrap_remote_tool(sample_tool):
     tool_fn = sample_tool["function"]
     tool_metadata = {
         "name": sample_tool["name"],
-        "signature": sample_tool["name"] + sample_tool["signature"],
+        "params": sample_tool["params"],
         "doc": sample_tool["doc"],
         "async": inspect.iscoroutinefunction(tool_fn),
     }
