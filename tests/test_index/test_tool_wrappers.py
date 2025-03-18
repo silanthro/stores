@@ -53,7 +53,17 @@ async def test_wrap_tool_w_defaults(sample_tool_w_defaults):
     assert wrapped_tool.__name__ == sample_tool_w_defaults["name"]
     assert inspect.getdoc(wrapped_tool) == sample_tool_w_defaults["doc"]
     # Check that tool runs
+    # Note: In some cases we need to supply an argument to the original function
+    # even though arg annotation is Optional
     if inspect.iscoroutinefunction(tool_fn):
-        assert await wrapped_tool() == await tool_fn()
+        try:
+            original_result = await tool_fn()
+        except TypeError:
+            original_result = await tool_fn("test")
+        assert await wrapped_tool() == original_result
     else:
-        assert wrapped_tool() == tool_fn()
+        try:
+            original_result = tool_fn()
+        except TypeError:
+            original_result = tool_fn("test")
+        assert wrapped_tool() == original_result

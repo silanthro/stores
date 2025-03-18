@@ -10,7 +10,18 @@ import sysconfig
 from inspect import Parameter
 from multiprocessing.connection import Connection
 from pathlib import Path
-from typing import Awaitable, Callable, TypedDict
+from types import NoneType
+from typing import (
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    TypedDict,
+    Union,
+    get_args,
+    get_origin,
+)
 
 import yaml
 from makefun import create_function
@@ -244,6 +255,18 @@ def wrap_remote_tool(
     index_folder: str | Path,
     env_vars: dict | None = None,
 ):
+    """
+    Wrap remote tool since we cannot actually define these tools
+    outside of their venv
+    """
+    # Explicitly import some typing Types to prevent create_function
+    # from running into NameError
+    _support_types = [
+        Dict,
+        List,
+        Optional,
+    ]
+
     # TODO: Handle misc issues
     # - . in function name
     def func_handler(*args, **kwargs):
@@ -284,33 +307,56 @@ def wrap_remote_tool(
     return func
 
 
-# Wrap tool to make it compatible with LLM libraries
 def wrap_tool(tool: Callable | Awaitable):
+    """
+    Wrap tool to make it compatible with LLM libraries
+    e.g. Gemini does not accept non-None default values
+    If there are any default args, we set default value to None
+    and inject the correct default value at runtime.
+    """
+    # Explicitly import some typing Types to prevent create_function
+    # from running into NameError
+    _support_types = [
+        Dict,
+        List,
+        Optional,
+    ]
     # Retrieve default arguments
     sig = inspect.signature(tool)
     new_args = []
     default_args = {}
     for argname, arg in sig.parameters.items():
+        argtype = arg.annotation
         if arg.default is Parameter.empty:
-            new_args.append(arg)
+            # Check if it's annotated with Optional or Union[None, X]
+            # TODO: We might want to remove the Optional tag instead since no
+            # default value is supplied
+            if get_origin(argtype) == Union and NoneType in get_args(argtype):
+                new_args.append(
+                    arg.replace(
+                        default=None,
+                        kind=Parameter.POSITIONAL_OR_KEYWORD,
+                        annotation=argtype,
+                    )
+                )
+            else:
+                new_args.append(arg)
         else:
             # Process args with default values
             # - Store default value
             # - Change type to include None
             default_args[argname] = arg.default
-            new_annotation = arg.annotation
+            new_annotation = argtype
             if new_annotation is Parameter.empty:
-                new_annotation = type(arg.default)
-            new_annotation = None | new_annotation
+                new_annotation = Optional[type(arg.default)]
+            if get_origin(new_annotation) != Union or NoneType not in get_args(
+                new_annotation
+            ):
+                new_annotation = Optional[new_annotation]
             new_args.append(
                 arg.replace(
-                    # Set to None instead of empty because
-                    # Gemini accepts a None default value but
-                    # raises an error with other default
-                    # values. And we still want to be able to
-                    # call the tool without supplying this arg
-                    # default=Parameter.empty,
                     default=None,
+                    kind=Parameter.POSITIONAL_OR_KEYWORD,
                     annotation=new_annotation,
                 )
             )

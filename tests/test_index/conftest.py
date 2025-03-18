@@ -3,6 +3,7 @@ import logging
 import shutil
 import venv
 from pathlib import Path
+from typing import Optional
 
 import pytest
 
@@ -83,6 +84,25 @@ def foo_w_default_notype(bar="test"):
     return bar
 
 
+def foo_w_optional(bar: Optional[str]):
+    """
+    Documentation of foo_w_optional
+    Args:
+        bar (Optional[str]): Sample text
+    """
+    bar = bar or "test"
+    return bar
+
+
+def foo_w_optional_and_default(bar: Optional[str] = "test"):
+    """
+    Documentation of foo_w_optional
+    Args:
+        bar (Optional[str]): Sample text
+    """
+    return bar
+
+
 async def async_foo(bar: str):
     """
     Documentation of async_foo
@@ -117,11 +137,19 @@ def sample_tool(request):
     params=[
         {
             "function": foo_w_default,
-            "signature": "(bar: None | str = None)",
+            "signature": "(bar: Optional[str] = None)",
         },
         {
             "function": foo_w_default_notype,
-            "signature": "(bar: None | str = None)",
+            "signature": "(bar: Optional[str] = None)",
+        },
+        {
+            "function": foo_w_optional,
+            "signature": "(bar: Optional[str] = None)",
+        },
+        {
+            "function": foo_w_optional_and_default,
+            "signature": "(bar: Optional[str] = None)",
         },
     ],
 )
