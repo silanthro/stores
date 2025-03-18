@@ -9,15 +9,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "fuzzywuzzy>=0.18.0",
     "gitpython>=3.1.44",
-    "google-api-python-client>=2.163.0",
-    "google-auth-httplib2>=0.2.0",
-    "google-auth-oauthlib>=1.2.1",
-    "litellm>=1.63.0",
-    "llm-sandbox[docker]>=0.2.3",
     "makefun>=1.15.6",
-    "markdownify>=1.1.0",
-    "matplotlib>=3.10.1",
-    "python-levenshtein>=0.27.1",
     "pyyaml>=6.0.2",
 ]
 
