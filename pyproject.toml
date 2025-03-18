@@ -31,3 +31,19 @@ select = ["E4", "E7", "E9", "F", "B", "I"]
 
 # Avoid trying to fix flake8-bugbear (`B`) violations.
 unfixable = ["B"]
+
+
+[tool.uv]
+dev-dependencies = [
+    "pylint==3.3.1",
+    "pylint-pydantic==0.3.2",
+    "ruff>=0.7.3",
+    "coverage==7.6.10",
+    "pytest==8.3.4",
+    "pytest-asyncio>=0.25.2",
+]
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
+asyncio_mode = "auto"
+log_cli = "True"
