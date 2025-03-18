@@ -3,6 +3,7 @@ import logging
 import shutil
 import venv
 from enum import Enum
+from inspect import Parameter
 from pathlib import Path
 from typing import Optional, TypedDict
 
@@ -81,10 +82,26 @@ async def async_foo(bar: str):
         {
             "function": foo,
             "signature": "(bar: str)",
+            "params": [
+                {
+                    "name": "bar",
+                    "type": str,
+                    "kind": Parameter.POSITIONAL_OR_KEYWORD,
+                    "default": Parameter.empty,
+                }
+            ],
         },
         {
             "function": async_foo,
             "signature": "(bar: str)",
+            "params": [
+                {
+                    "name": "bar",
+                    "type": str,
+                    "kind": Parameter.POSITIONAL_OR_KEYWORD,
+                    "default": Parameter.empty,
+                }
+            ],
         },
     ],
 )

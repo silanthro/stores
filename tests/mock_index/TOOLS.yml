@@ -1,4 +1,6 @@
 tools:
 - tools.foo
 - tools.async_foo
+- tools.enum_input
+- tools.typed_dict_input
 - hello.world

@@ -35,19 +35,28 @@ def test_load_index(local_index_folder):
     assert [t.__name__ for t in index.tools] == [
         "tools.foo",
         "tools.async_foo",
+        "tools.enum_input",
+        "tools.typed_dict_input",
         "hello.world",
         "REPLY",
     ]
     # Test tool execution
-    sample_string = "hello world"
+    sample_inputs = {
+        "tools.foo": "hello world",
+        "tools.async_foo": "hello world",
+        "tools.enum_input": "red",
+        "tools.typed_dict_input": {"name": "Tiger", "num_legs": 4},
+        "hello.world": "hello world",
+    }
     for tool in index.tools[:-1]:
         result = index.execute(
             tool.__name__,
             kwargs={
-                "bar": sample_string,
+                "bar": sample_inputs[tool.__name__],
             },
         )
-        assert result == sample_string
+        assert result == sample_inputs[tool.__name__]
+    sample_string = "hello world"
     assert index.execute("REPLY", {"msg": sample_string}) == sample_string
     # Test parse_and_execute
     message = f"""{{"toolname": "REPLY", "kwargs": {{"msg": "{sample_string}"}}}}"""
