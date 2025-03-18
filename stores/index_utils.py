@@ -51,10 +51,10 @@ def get_param_signature(param: inspect.Parameter):
     }
     if inspect.isclass(param_type) and issubclass(param_type, Enum):
         # Enum
-        enum_values = list(map(lambda c: c.value, param_type))
+        # enum_values = list(map(lambda c: c.value, param_type))
         return {
             **param_sig,
-            "type": type(enum_values[0]),
+            "type": "enum",
             "enum": {c.name: c.value for c in param_type},
         }
     if (
@@ -293,9 +293,9 @@ def run_remote_tool(
     if inspect.iscoroutinefunction(fn):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(fn(**kwargs))
+        result = loop.run_until_complete(fn(*args, **kwargs))
     else:
-        result = fn(**kwargs)
+        result = fn(*args, **kwargs)
     return result
 
 
