@@ -1,4 +1,5 @@
 import logging
+from inspect import Parameter
 from pathlib import Path
 
 import pytest
@@ -38,17 +39,41 @@ def test_remote_tool(remote_index_folder):
     assert signatures == [
         {
             "name": "mock_index.get_package",
-            "signature": "get_package()",
+            "params": [],
             "doc": None,
             "async": False,
         },
         {
             "name": "mock_index.async_get_package",
-            "signature": "async_get_package()",
+            "params": [],
             "doc": None,
             "async": True,
         },
+        {
+            "name": "mock_index.tool_w_typed_dict",
+            "params": [
+                {
+                    "name": "animal",
+                    "kind": Parameter.POSITIONAL_OR_KEYWORD,
+                    "type": "object",
+                    "properties": {
+                        "name": str,
+                        "num_legs": int,
+                    },
+                    "default": Parameter.empty,
+                },
+            ],
+            "doc": None,
+            "async": False,
+        },
     ]
+    # Test wrap_remote_tool
+    for sig in signatures:
+        utils.wrap_remote_tool(
+            sig,
+            venv_folder,
+            remote_index_folder,
+        )
 
     # Tools should run successfully
     for tool_sig in signatures:
@@ -56,6 +81,9 @@ def test_remote_tool(remote_index_folder):
             fn=utils.run_remote_tool,
             kwargs={
                 "tool_id": tool_sig["name"],
+                "kwargs": {"animal": {"name": "Tiger", "num_legs": 4}}
+                if tool_sig["name"] == "mock_index.tool_w_typed_dict"
+                else None,
                 "index_folder": remote_index_folder,
             },
             venv_folder=venv_folder,
