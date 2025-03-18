@@ -42,14 +42,14 @@ async def test_remote_tool(remote_index_folder):
             "name": "mock_index.get_package",
             "params": [],
             "doc": None,
-            "async": False,
+            "is_async": False,
             "return_type": Parameter.empty,
         },
         {
             "name": "mock_index.async_get_package",
             "params": [],
             "doc": None,
-            "async": True,
+            "is_async": True,
             "return_type": Parameter.empty,
         },
         {
@@ -69,7 +69,7 @@ async def test_remote_tool(remote_index_folder):
                 },
             ],
             "doc": None,
-            "async": False,
+            "is_async": False,
             "return_type": Parameter.empty,
         },
         {
@@ -88,7 +88,7 @@ async def test_remote_tool(remote_index_folder):
                 },
             ],
             "doc": None,
-            "async": False,
+            "is_async": False,
             "return_type": Parameter.empty,
         },
     ]
