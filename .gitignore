@@ -175,6 +175,3 @@ cython_debug/
 
 # macOS metadata file
 .DS_Store
-
-# Temp
-app/
