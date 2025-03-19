@@ -12,9 +12,9 @@ import stores
 def main():
     # Load custom tools and set the required environment variables
     index = stores.Index(
-        ["./custom_tools"],
+        ["silanthro/send-gmail"],
         env_vars={
-            "./custom_tools": {
+            "silanthro/send-gmail": {
                 "GMAIL_ADDRESS": os.environ["GMAIL_ADDRESS"],
                 "GMAIL_PASSWORD": os.environ["GMAIL_PASSWORD"],
             },
