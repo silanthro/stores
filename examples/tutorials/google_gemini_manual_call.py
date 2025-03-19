@@ -66,7 +66,7 @@ def main():
                 # If the REPLY tool is called, break the loop and return the message
                 if name == "REPLY":
                     print(f"Assistant response: {args['msg']}")
-                    return
+                    return # End the agent loop
 
                 # Otherwise, execute the tool call
                 print(f"Executing tool call: {name}({args})")
