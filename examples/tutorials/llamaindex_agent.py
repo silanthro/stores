@@ -6,7 +6,7 @@ import os
 
 from llama_index.core.agent import AgentRunner
 from llama_index.core.tools import FunctionTool
-from llama_index.llms.gemini import Gemini
+from llama_index.llms.google_genai import GoogleGenAI
 
 import stores
 
@@ -31,7 +31,7 @@ def main():
     ]  # Convert tools to LlamaIndex FunctionTool format
 
     # Initialize the model with Gemini
-    llm = Gemini(model=model)
+    llm = GoogleGenAI(model=model)
 
     # Create LlamaIndex agent with tools
     agent = AgentRunner.from_llm(tools, llm=llm, verbose=True)

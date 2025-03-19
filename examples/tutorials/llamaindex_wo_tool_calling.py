@@ -5,7 +5,7 @@ This example shows how to use stores with LlamaIndex without native tool calling
 import os
 
 from llama_index.core.llms import ChatMessage
-from llama_index.llms.gemini import Gemini
+from llama_index.llms.google_genai import GoogleGenAI
 
 import stores
 
@@ -34,7 +34,7 @@ def main():
     ]
 
     # Initialize the model with Gemini
-    llm = Gemini(model=model)
+    llm = GoogleGenAI(model=model)
 
     # Run the agent loop
     while True:
