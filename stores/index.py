@@ -116,12 +116,12 @@ class Index(BaseModel):
                         self._index_paths[index_name] = str(CACHE_DIR / index_name)
                     except Exception:
                         logger.warning(
-                            f'Unable to load index "{index_name}"\nIf this is a local index, make sure it can be found as a directory',
+                            f'Unable to load index "{index_name}"\nIf this is a local index, make sure it can be found as a directory and contains a TOOLS.yml file.',
                             exc_info=True,
                         )
                 if loaded_index is None:
                     raise ValueError(
-                        f'Unable to load index "{index_name}"\nIf this is a local index, make sure it can be found as a directory'
+                        f'Unable to load index "{index_name}"\nIf this is a local index, make sure it can be found as a directory and contains a TOOLS.yml file.'
                     )
                 else:
                     for t in loaded_index:
