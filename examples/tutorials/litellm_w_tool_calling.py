@@ -11,7 +11,7 @@ import stores
 
 
 def main():
-    # Load custom tools and set the required environment variables
+    # Load tools and set the required environment variables
     index = stores.Index(
         ["silanthro/send-gmail"],
         env_vars={
@@ -27,7 +27,6 @@ def main():
     system_instruction = "You are a helpful assistant who can generate poems in emails. You do not have to ask for confirmations."
     model = "gemini/gemini-2.0-flash-001"
     tools = index.format_tools("google-gemini")
-    print(f"Tools: {json.dumps(tools, indent=2)}")
     messages = [
         {"role": "system", "content": system_instruction},
         {"role": "user", "content": user_request},
@@ -47,27 +46,46 @@ def main():
             timeout=60,
         )
 
-        # Execute the tool calls
-        tool_calls = response.choices[0].message.tool_calls
-        for tool_call in tool_calls:
-            print(f"Tool Call: {tool_call}")
-            name = tool_call.function.name.replace("-", ".")
-            args = json.loads(tool_call.function.arguments)
+        # Check if the response contains only text and no tool calls, which indicates task completion for this example
+        if (
+            response.choices[0].message.content
+            and not response.choices[0].message.tool_calls
+        ):
+            print(f"Assistant response: {response.choices[0].message.content}")
+            return  # End the agent loop
 
-            # If the REPLY tool is called, break the loop and return the message
-            if tool_call.function.name == "REPLY":
-                print(f"Assistant Response: {args['msg']}")
-                return
+        # Otherwise, process the response, which could include both text and tool calls
+        if response.choices[0].message.content:
+            print(f"Assistant response: {response.choices[0].message.content}")
+            messages.append(
+                {"role": "assistant", "content": response.choices[0].message.content}
+            )
 
-            # Otherwise, execute the tool call
-            output = index.execute(name, args)
-            messages.append(
-                {"role": "assistant", "content": str(tool_call)}
-            )  # Append the assistant's tool call as context
-            messages.append(
-                {"role": "user", "content": f"Tool Output: {output}"}
-            )  # Some APIs require a tool role instead
-            print(f"Tool Output: {output}")
+        if response.choices[0].message.tool_calls:
+            tool_calls = response.choices[0].message.tool_calls
+            for tool_call in tool_calls:
+                name = tool_call.function.name.replace("-", ".")
+                args = json.loads(tool_call.function.arguments)
+
+                # If the REPLY tool is called, break the loop and return the message
+                if tool_call.function.name == "REPLY":
+                    print(f"Assistant response: {args['msg']}")
+                    return  # End the agent loop
+
+                # Otherwise, execute the tool call
+                print(f"Executing tool call: {name}({args})")
+                output = index.execute(name, args)
+                print(f"Tool output: {output}")
+                messages.append(
+                    {"role": "assistant", "tool_calls": [tool_call]}
+                )  # Append the assistant's tool call as context
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": str(output),
+                    }
+                )  # Append the tool call result as context
 
 
 if __name__ == "__main__":
