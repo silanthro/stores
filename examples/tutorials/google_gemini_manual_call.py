@@ -62,6 +62,13 @@ def main():
             elif part.function_call:
                 name = part.function_call.name
                 args = part.function_call.args
+
+                # If the REPLY tool is called, break the loop and return the message
+                if name == "REPLY":
+                    print(f"Assistant response: {args['msg']}")
+                    return
+
+                # Otherwise, execute the tool call
                 print(f"Executing tool call: {name}({args})")
                 output = index.execute(name, args)
                 print(f"Tool output: {output}")
