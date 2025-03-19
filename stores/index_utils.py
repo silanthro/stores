@@ -385,7 +385,7 @@ def wrap_remote_tool(
         elif return_type_metadata["type"] == "enum":
             return_type = Enum(param["type_name"], return_type_metadata["enum"])
         else:
-            return_type = tool_metadata["type"]
+            return_type = return_type_metadata["type"]
     signature = inspect.Signature(params, return_annotation=return_type)
     func = create_function(
         signature,
