@@ -45,14 +45,19 @@ def main():
         )
 
         # Check if the response contain only text and no function call, which indicates task completion for this example
-        if completion.choices[0].message.content and not completion.choices[0].message.tool_calls:
+        if (
+            completion.choices[0].message.content
+            and not completion.choices[0].message.tool_calls
+        ):
             print(f"Assistant response: {completion.choices[0].message.content}")
             return  # End the agent loop
 
         # Otherwise, process the response, which could include both text and tool calls
         if completion.choices[0].message.content:
             print(f"Assistant response: {completion.choices[0].message.content}")
-            messages.append({"role": "assistant", "content": completion.choices[0].message.content})
+            messages.append(
+                {"role": "assistant", "content": completion.choices[0].message.content}
+            )
 
         if completion.choices[0].message.tool_calls:
             tool_calls = completion.choices[0].message.tool_calls
@@ -65,16 +70,20 @@ def main():
                     print(f"Assistant response: {args['msg']}")
                     return  # End the agent loop
 
-            # Otherwise, execute the tool call
-            print(f"Executing tool call: {name}({args})")
-            output = index.execute(name, args)
-            print(f"Tool output: {output}")
-            messages.append(
-                {"role": "assistant", "content": str(tool_call)}
-            )  # Append the assistant's tool call as context
-            messages.append(
-                {"role": "user", "content": f"Tool output: {output}"}
-            )  # Append the tool call result as context
+                # Otherwise, execute the tool call
+                print(f"Executing tool call: {name}({args})")
+                output = index.execute(name, args)
+                print(f"Tool output: {output}")
+                messages.append(
+                    {"role": "assistant", "tool_calls": [tool_call]}
+                )  # Append the assistant's tool call as context
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": str(output),
+                    }
+                )  # Append the tool call result as context
 
 
 if __name__ == "__main__":

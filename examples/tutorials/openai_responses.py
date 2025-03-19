@@ -24,7 +24,7 @@ def main():
 
     # Set up the user request, system instruction, model parameters, tools, and initial messages
     user_request = "Make up a parenting poem and email it to x@gmail.com"
-    system_instruction = "You are a helpful assistant who can generate poems in emails. When necessary, you have tools at your disposal. Always use the REPLY tool when you have completed the task. You do not have to ask for confirmations."
+    system_instruction = "You are a helpful assistant who can generate poems in emails. You do not have to ask for confirmations."
     model = "gpt-4o-mini-2024-07-18"
     tools = index.format_tools("openai-responses")
     messages = [
@@ -44,31 +44,39 @@ def main():
             tools=tools,
         )
 
-        # Execute the tool calls
-        tool_calls = response.output
-        for tool_call in tool_calls:
-            print(f"Tool Call: {tool_call}")
-            name = tool_call.name.replace("-", ".")
-            args = json.loads(tool_call.arguments)
+        # Check if the response contains only text and no tool call, which indicates task completion for this example
+        if len(response.output) == 1 and response.output[0].type == "text":
+            print(f"Assistant response: {response.output[0].text}")
+            return  # End the agent loop
 
-            # If the REPLY tool is called, break the loop and return the message
-            if name == "REPLY":
-                print(f"Assistant Response: {args['msg']}")
-                return
+        # Otherwise, process the response, which could include both text and tool calls
+        for item in response.output:
+            if item.type == "text":
+                print(f"Assistant response: {item.text}")
+                messages.append({"role": "assistant", "content": item.text})
+            elif item.type == "function_call":
+                name = item.name.replace("-", ".")
+                args = json.loads(item.arguments)
 
-            # Otherwise, execute the tool call
-            output = index.execute(name, args)
-            messages.append(
-                tool_call
-            )  # Append the assistant's tool call message as context
-            messages.append(
-                {
-                    "type": "function_call_output",
-                    "call_id": tool_call.call_id,
-                    "output": str(output),
-                }
-            )
-            print(f"Tool Output: {output}")
+                # If the REPLY tool is called, break the loop and return the message
+                if name == "REPLY":
+                    print(f"Assistant response: {args['msg']}")
+                    return  # End the agent loop
+
+                # Otherwise, execute the tool call
+                print(f"Executing tool call: {name}({args})")
+                output = index.execute(name, args)
+                print(f"Tool output: {output}")
+                messages.append(
+                    item
+                )  # Append the assistant's tool call message as context
+                messages.append(
+                    {
+                        "type": "function_call_output",
+                        "call_id": item.call_id,
+                        "output": str(output),
+                    }
+                )  # Append the tool call result as context
 
 
 if __name__ == "__main__":
