@@ -25,7 +25,9 @@ logging.basicConfig()
 logger = logging.getLogger("stores.index")
 
 
-def load_remote_index(index_id: str, branch_or_commit: str | None = None):
+def load_remote_index(
+    index_id: str, branch_or_commit: str | None = None, env_vars: dict | None = None
+):
     index_folder = CACHE_DIR / index_id
     if not index_folder.exists():
         # TODO: Update to use DB
@@ -54,6 +56,7 @@ def load_remote_index(index_id: str, branch_or_commit: str | None = None):
             s,
             venv_folder,
             index_folder,
+            env_vars=env_vars or {},
         )
         for s in index_signatures
     ]
@@ -101,10 +104,13 @@ class Index(BaseModel):
                 if loaded_index is None and isinstance(index_name, str):
                     # Load remote index
                     try:
+                        index_env_vars = env_vars.get(index_name)
                         branch_or_commit = None
                         if ":" in index_name:
                             index_name, branch_or_commit = index_name.split(":")
-                        loaded_index = load_remote_index(index_name, branch_or_commit)
+                        loaded_index = load_remote_index(
+                            index_name, branch_or_commit, index_env_vars
+                        )
                         self._index_paths[index_name] = str(CACHE_DIR / index_name)
                     except Exception:
                         logger.warning(

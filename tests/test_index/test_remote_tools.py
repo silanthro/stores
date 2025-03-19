@@ -53,6 +53,22 @@ async def test_remote_tool(remote_index_folder):
             "return_type": Parameter.empty,
         },
         {
+            "name": "mock_index.typed_function",
+            "params": [
+                {
+                    "name": "bar",
+                    "kind": Parameter.POSITIONAL_OR_KEYWORD,
+                    "type": str,
+                    "default": Parameter.empty,
+                },
+            ],
+            "doc": None,
+            "is_async": False,
+            "return_type": {
+                "type": str,
+            },
+        },
+        {
             "name": "mock_index.enum_input",
             "params": [
                 {
@@ -70,7 +86,15 @@ async def test_remote_tool(remote_index_folder):
             ],
             "doc": None,
             "is_async": False,
-            "return_type": Parameter.empty,
+            "return_type": {
+                "type": "enum",
+                "type_name": "Color",
+                "enum": {
+                    "RED": "red",
+                    "GREEN": "green",
+                    "BLUE": "blue",
+                },
+            },
         },
         {
             "name": "mock_index.typed_dict_input",
@@ -89,7 +113,14 @@ async def test_remote_tool(remote_index_folder):
             ],
             "doc": None,
             "is_async": False,
-            "return_type": Parameter.empty,
+            "return_type": {
+                "type": "object",
+                "type_name": "Animal",
+                "properties": {
+                    "name": str,
+                    "num_legs": int,
+                },
+            },
         },
     ]
     # Test wrap_remote_tool
@@ -104,13 +135,19 @@ async def test_remote_tool(remote_index_folder):
 
     # Tools should run successfully
     for tool in tools:
-        if tool.__name__ == "mock_index.enum_input":
+        if tool.__name__ == "mock_index.typed_function":
             kwargs = {"bar": "red"}
+            output = kwargs["bar"]
+        elif tool.__name__ == "mock_index.enum_input":
+            kwargs = {"bar": "red"}
+            output = kwargs["bar"]
         elif tool.__name__ == "mock_index.typed_dict_input":
             kwargs = {"bar": {"name": "Tiger", "num_legs": 4}}
+            output = kwargs["bar"]
         else:
             kwargs = {}
+            output = "pip_install_test"
         if inspect.iscoroutinefunction(tool):
-            assert await tool(**kwargs) == "pip_install_test"
+            assert await tool(**kwargs) == output
         else:
-            assert tool(**kwargs) == "pip_install_test"
+            assert tool(**kwargs) == output
