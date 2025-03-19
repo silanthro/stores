@@ -78,10 +78,11 @@ class Index(BaseModel):
         tools: list[Callable | str | Path] | None = None,
         env_vars: dict | None = None,
     ):
+        env_vars = env_vars or {}
         super().__init__(
             tools=[],
             tools_dict={},
-            env_vars=env_vars or {},
+            env_vars=env_vars,
         )
         self._tool_indexes = {}
         self._index_paths = {}
