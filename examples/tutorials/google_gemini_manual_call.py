@@ -11,7 +11,7 @@ import stores
 
 
 def main():
-    # Load custom tools and set the required environment variables
+    # Load tools and set the required environment variables
     index = stores.Index(
         ["silanthro/send-gmail"],
         env_vars={
@@ -66,7 +66,7 @@ def main():
                 # If the REPLY tool is called, break the loop and return the message
                 if name == "REPLY":
                     print(f"Assistant response: {args['msg']}")
-                    return # End the agent loop
+                    return  # End the agent loop
 
                 # Otherwise, execute the tool call
                 print(f"Executing tool call: {name}({args})")
@@ -77,7 +77,7 @@ def main():
                         "role": "assistant",
                         "parts": [{"functionCall": part.function_call}],
                     }
-                )
+                )  # Append the assistant's tool call as context
                 messages.append(
                     {
                         "role": "user",
@@ -90,7 +90,7 @@ def main():
                             }
                         ],
                     }
-                )
+                )  # Append the tool call result as context
 
 
 if __name__ == "__main__":

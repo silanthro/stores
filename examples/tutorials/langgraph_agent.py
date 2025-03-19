@@ -12,7 +12,7 @@ import stores
 
 
 def main():
-    # Load custom tools and set the required environment variables
+    # Load tools and set the required environment variables
     index = stores.Index(
         ["silanthro/send-gmail"],
         env_vars={
@@ -38,11 +38,11 @@ def main():
     agent_model = ChatGoogleGenerativeAI(model=model)
     agent_executor = create_react_agent(agent_model, index.tools)
 
-    # Get the agent to execute the request, call tools, and update messages
+    # Run the agent. LangGraph agent will automatically end the loop when appropriate.
     response = agent_executor.invoke(messages)
 
-    # Print the final response from the model
-    print(f"Assistant Response: {response['messages'][-1].content}")
+    # Print the final response from the agent
+    print(f"Assistant response: {response['messages'][-1].content}")
 
 
 if __name__ == "__main__":

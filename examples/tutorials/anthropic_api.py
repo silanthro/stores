@@ -10,7 +10,7 @@ import stores
 
 
 def main():
-    # Load custom tools and set the required environment variables
+    # Load tools and set the required environment variables
     index = stores.Index(
         ["silanthro/send-gmail"],
         env_vars={
@@ -47,9 +47,9 @@ def main():
         blocks = response.content
         if all(block.type == "text" for block in blocks):
             print(f"Assistant response: {blocks[0].text}")
-            return # End the agent loop
+            return  # End the agent loop
 
-        # Otherwise, process the response, which includes both text and tool use
+        # Otherwise, process the response, which could include both text and tool use
         for block in blocks:
             if block.type == "text":
                 print(f"Assistant response: {block.text}")
@@ -61,7 +61,7 @@ def main():
                 # If the REPLY tool is called, break the loop and return the message
                 if name == "REPLY":
                     print(f"Assistant response: {args['msg']}")
-                    return # End the agent loop
+                    return  # End the agent loop
 
                 # Otherwise, execute the tool call
                 print(f"Executing tool call: {name}({args})")
@@ -74,7 +74,7 @@ def main():
                             {
                                 "type": "tool_use",
                                 "id": block.id,
-                                "name": block.name, # Use the original block name or the API will return an error
+                                "name": block.name,  # Use the original block name or the API will return an error
                                 "input": block.input,
                             }
                         ],

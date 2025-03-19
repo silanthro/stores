@@ -12,7 +12,7 @@ import stores
 
 
 def main():
-    # Load custom tools and set the required environment variables
+    # Load tools and set the required environment variables
     index = stores.Index(
         ["silanthro/send-gmail"],
         env_vars={
@@ -28,7 +28,7 @@ def main():
     model = "models/gemini-2.0-flash-001"
     tools = [
         FunctionTool.from_defaults(fn=tool_function) for tool_function in index.tools
-    ]  # Convert custom tools to LlamaIndex FunctionTool format
+    ]  # Convert tools to LlamaIndex FunctionTool format
 
     # Initialize the model with Gemini
     llm = Gemini(model=model)
@@ -36,9 +36,11 @@ def main():
     # Create LlamaIndex agent with tools
     agent = AgentRunner.from_llm(tools, llm=llm, verbose=True)
 
-    # Run the agent
+    # Run the agent. LlamaIndex agent will automatically end the loop when appropriate.
     response = agent.chat(user_request)
-    print(f"Assistant Response: {response}")
+
+    # Print the final response from the agent
+    print(f"Assistant response: {response}")
 
 
 if __name__ == "__main__":
