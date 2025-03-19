@@ -43,10 +43,10 @@ def main():
             input=messages,
             tools=tools,
         )
-
+        
         # Check if the response contains only text and no tool call, which indicates task completion for this example
-        if len(response.output) == 1 and response.output[0].type == "text":
-            print(f"Assistant response: {response.output[0].text}")
+        if len(response.output) == 1 and response.output_text:
+            print(f"Assistant response: {response.output_text}")
             return  # End the agent loop
 
         # Otherwise, process the response, which could include both text and tool calls
