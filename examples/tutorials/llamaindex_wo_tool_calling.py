@@ -49,19 +49,19 @@ def main():
 
         # Because there is no native function calling, we need to parse the tool call from the response text
         tool_call = stores.llm_parse_json(response_text)
-        print(f"Tool Call: {tool_call}")
+        print(f"Executing tool call: {tool_call}")
 
         # If the REPLY tool is called, break the loop and return the message
         if tool_call.get("toolname") == "REPLY":
-            print(f"Assistant Response: {tool_call.get('kwargs', {}).get('msg')}")
+            print(f"Assistant response: {tool_call.get('kwargs', {}).get('msg')}")
             break
 
         # Execute the tool
         output = index.execute(tool_call.get("toolname"), tool_call.get("kwargs"))
         messages.append(
-            ChatMessage(role="user", content=f"Tool Output: {output}")
+            ChatMessage(role="user", content=f"Tool output: {output}")
         )  # Some APIs require a tool role instead
-        print(f"Tool Output: {output}")
+        print(f"Tool output: {output}")
 
 
 if __name__ == "__main__":
