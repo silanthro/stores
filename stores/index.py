@@ -37,7 +37,8 @@ def load_remote_index(
             repo.git.checkout(branch_or_commit)
     # Create venv and install deps
     venv_folder = index_folder / VENV_NAME
-    venv.create(venv_folder, symlinks=True, with_pip=True)
+    if not venv_folder.exists():
+        venv.create(venv_folder, symlinks=True, with_pip=True)
 
     run_mp_process(
         fn=install_venv_deps,
