@@ -230,6 +230,7 @@ def run_mp_process_helper(
             result = fn(**kwargs)
     except Exception as e:
         # Handle exception in parent
+        logger.warning(e, exc_info=True)
         error = e
         if conn:
             conn.send(error)
