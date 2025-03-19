@@ -43,7 +43,7 @@ def main():
             input=messages,
             tools=tools,
         )
-        
+
         # Check if the response contains only text and no tool call, which indicates task completion for this example
         if len(response.output) == 1 and response.output_text:
             print(f"Assistant response: {response.output_text}")

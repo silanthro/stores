@@ -4,8 +4,8 @@ This example shows how to use stores with LangChain with native function calls.
 
 import os
 
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
 
 import stores
 
@@ -42,10 +42,7 @@ def main():
         response = model_with_tools.invoke(messages)
 
         # Check if the response contains only text and no tool calls, which indicates task completion for this example
-        if (
-            response.content
-            and not response.tool_calls
-        ):
+        if response.content and not response.tool_calls:
             print(f"Assistant response: {response.content}")
             return  # End the agent loop
 

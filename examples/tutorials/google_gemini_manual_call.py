@@ -11,7 +11,7 @@ import stores
 
 
 def main():
-    # Load tools and set the required environment variables
+    # Load custom tools and set the required environment variables
     index = stores.Index(
         ["silanthro/send-gmail"],
         env_vars={
