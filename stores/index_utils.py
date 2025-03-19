@@ -8,11 +8,13 @@ import os
 import subprocess
 import sys
 import sysconfig
+from enum import Enum
 from inspect import Parameter
 from multiprocessing.connection import Connection
 from pathlib import Path
 from types import NoneType
 from typing import (
+    Any,
     Awaitable,
     Callable,
     Optional,
@@ -37,11 +39,64 @@ TOOLS_CONFIG_FILENAME = "TOOLS.yml"
 
 class ToolMetadata(TypedDict):
     name: str
-    signature: str
-    docs: str
+    params: list[Any]
+    doc: str
+    is_async: bool
+    return_type: Any
+
+
+def get_param_type(param_type: type):
+    if inspect.isclass(param_type) and issubclass(param_type, Enum):
+        # Enum
+        # enum_values = list(map(lambda c: c.value, param_type))
+        return {
+            "type_name": param_type.__name__,
+            "type": "enum",
+            "enum": {c.name: c.value for c in param_type},
+        }
+    if (
+        inspect.isclass(param_type)
+        and issubclass(param_type, dict)
+        and hasattr(param_type, "__annotations__")
+    ):
+        # TypedDict
+        return {
+            "type_name": param_type.__name__,
+            "type": "object",
+            "properties": {
+                # TODO: Recursively examine proptype
+                propname: proptype
+                for propname, proptype in param_type.__annotations__.items()
+            },
+        }
+    return {
+        "type": param_type,
+    }
+
+
+def get_param_signature(param: Parameter):
+    param_type = get_param_type(param.annotation)
+    return {
+        "name": param.name,
+        "kind": param.kind,
+        "default": param.default,
+        **param_type,
+    }
 
 
 def get_index_signatures(index_folder: str | Path) -> list[ToolMetadata]:
+    """
+    This is used to retrieve tool signatures from tool indexes that are
+    isolated in their own venv.
+    In practice, this function will be run from within the venv.
+    Since we might not be able to export the tools outside of the venv,
+    retrieving signatures allows us to reconstruct tool wrappers that act
+    as proxies that will call the actual tools.
+    We also need to export metadata for custom arg types defined within the venv.
+    Only the following custom arg type parents are supported for now.
+    - TypedDict
+    - Enum
+    """
     index_folder = Path(index_folder)
 
     index_manifest = index_folder / TOOLS_CONFIG_FILENAME
@@ -66,16 +121,24 @@ def get_index_signatures(index_folder: str | Path) -> list[ToolMetadata]:
         tool = getattr(module, tool_name)
         tool.__name__ = tool_id
         tools.append(tool)
-    return [
-        {
-            "name": t.__name__,
-            # TODO: Handle custom types
-            "signature": t.__name__.split(".")[-1] + str(inspect.signature(t)),
-            "doc": inspect.getdoc(t),
-            "async": inspect.iscoroutinefunction(t),
-        }
-        for t in tools
-    ]
+
+    index_signatures = []
+    for tool in tools:
+        sig = inspect.signature(tool)
+        params = [get_param_signature(arg) for arg in sig.parameters.values()]
+        return_type = inspect.signature(tool).return_annotation
+        if return_type != Parameter.empty:
+            return_type = get_param_type(return_type)
+        index_signatures.append(
+            {
+                "name": tool.__name__,
+                "params": params,
+                "doc": inspect.getdoc(tool),
+                "is_async": inspect.iscoroutinefunction(tool),
+                "return_type": return_type,
+            }
+        )
+    return index_signatures
 
 
 def get_index_tools(index_folder: str | Path) -> list[Callable]:
@@ -242,9 +305,9 @@ def run_remote_tool(
     if inspect.iscoroutinefunction(fn):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(fn(**kwargs))
+        result = loop.run_until_complete(fn(*args, **kwargs))
     else:
-        result = fn(**kwargs)
+        result = fn(*args, **kwargs)
     return result
 
 
@@ -291,9 +354,41 @@ def wrap_remote_tool(
             venv_folder=venv_folder,
         )
 
+    # Reconstruct signature from list of args
+    params = []
+    for param in tool_metadata["params"]:
+        name = param["name"]
+        if param["type"] == "object":
+            argtype = TypedDict(param["type_name"], param["properties"])
+        elif param["type"] == "enum":
+            argtype = Enum(param["type_name"], param["enum"])
+        else:
+            argtype = param["type"]
+        params.append(
+            inspect.Parameter(
+                name=name,
+                kind=param["kind"],
+                default=param["default"],
+                annotation=argtype,
+            )
+        )
+    # Reconstruct return type
+    return_type_metadata = tool_metadata.get("return_type", Parameter.empty)
+    if return_type_metadata == Parameter.empty:
+        return_type = Parameter.empty
+    else:
+        if return_type_metadata["type"] == "object":
+            return_type = TypedDict(
+                param["type_name"], return_type_metadata["properties"]
+            )
+        elif return_type_metadata["type"] == "enum":
+            return_type = Enum(param["type_name"], return_type_metadata["enum"])
+        else:
+            return_type = tool_metadata["type"]
+    signature = inspect.Signature(params, return_annotation=return_type)
     func = create_function(
-        tool_metadata["signature"],
-        async_func_handler if tool_metadata.get("async") else func_handler,
+        signature,
+        async_func_handler if tool_metadata.get("is_async") else func_handler,
         doc=tool_metadata.get("doc"),
     )
     func = wrap_tool(func)
@@ -371,6 +466,6 @@ def wrap_tool(tool: Callable | Awaitable):
             return tool(*args, **kwargs)
 
     functools.update_wrapper(wrapper, tool)
-    wrapper.__signature__ = new_sig  # Set the new function signature
+    wrapper.__signature__ = new_sig
 
     return wrapper
