@@ -1,6 +1,7 @@
 """
 This example shows how to use stores with OpenAI's Chat Completions API.
 """
+
 import json
 import os
 
@@ -10,10 +11,6 @@ import stores
 
 
 def main():
-    # Example request and developer instruction to demonstrate the use of tools with OpenAI
-    request = "Make up a parenting poem and email it to x@gmail.com"
-    developer_instruction = "You are a helpful assistant who can generate poems in emails. When necessary, you have tools at your disposal."
-
     # Load custom tools and set the required environment variables
     index = stores.Index(
         ["./custom_tools"],
@@ -21,52 +18,54 @@ def main():
             "./custom_tools": {
                 "GMAIL_ADDRESS": os.environ["GMAIL_ADDRESS"],
                 "GMAIL_PASSWORD": os.environ["GMAIL_PASSWORD"],
-            },    
+            },
         },
     )
 
-    # Set up the initial messages for the model and from the user
+    # Set up the user request, system instruction, model parameters, tools, and initial messages
+    user_request = "Make up a parenting poem and email it to x@gmail.com"
+    system_instruction = "You are a helpful assistant who can generate poems in emails. When necessary, you have tools at your disposal. Always use the REPLY tool when you have completed the task. You do not have to ask for confirmations."
+    model = "gpt-4o-mini-2024-07-18"
+    tools = index.format_tools("openai-chat-completions")
     messages = [
-        {"role": "developer", "content": developer_instruction},
-        {"role": "user", "content": request}
+        {"role": "developer", "content": system_instruction},
+        {"role": "user", "content": user_request},
     ]
 
     # Initialize the model with OpenAI
     client = OpenAI()
 
-    # Get the response from the model
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini-2024-07-18",
-        messages=messages,
-        tools=index.format_tools("openai-chat-completions"),
-    )
+    # Run the agent loop
+    while True:
+        # Get the response from the model
+        completion = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            tools=tools,
+        )
 
-    print(f"Model Response: {completion.choices[0].message.content}")
+        # Execute the tool calls
+        tool_calls = completion.choices[0].message.tool_calls
+        for tool_call in tool_calls:
+            print(f"Tool Call: {tool_call}")
+            name = tool_call.function.name.replace("-", ".")
+            args = json.loads(tool_call.function.arguments)
 
-    # Get the tool calls
-    tool_calls = completion.choices[0].message.tool_calls
-    
-    # Execute the tool calls
-    for tool_call in tool_calls:
-        print(f"Tool Call: {tool_call}")
-        name = tool_call.function.name.replace("-", ".")
-        args = json.loads(tool_call.function.arguments)
-        output = index.execute(name, args)
-        messages.append(completion.choices[0].message)
-        messages.append({
-            "role": "tool", 
-            "tool_call_id": tool_call.id,
-            "content": output})
-        print(f"Tool Output: {output}")
+            # If the REPLY tool is called, break the loop and return the message
+            if name == "REPLY":
+                print(f"Assistant Response: {args['msg']}")
+                return
 
-    # Get the final response from the model
-    final_completion = client.chat.completions.create(
-        model="gpt-4o-mini-2024-07-18",
-        messages=messages,
-        tools=index.format_tools("openai-chat-completions"),
-    )
+            # Otherwise, execute the tool call
+            output = index.execute(name, args)
+            messages.append(
+                completion.choices[0].message
+            )  # Append the assistant's tool call message as context
+            messages.append(
+                {"role": "tool", "tool_call_id": tool_call.id, "content": str(output)}
+            )
+            print(f"Tool Output: {output}")
 
-    print(f"Final Model Response: {final_completion.choices[0].message.content}")
 
 if __name__ == "__main__":
     main()

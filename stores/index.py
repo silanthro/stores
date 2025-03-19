@@ -1,9 +1,11 @@
 import asyncio
 import inspect
 import logging
+import typing
 import venv
+from enum import Enum
 from pathlib import Path
-from typing import Callable
+from typing import Callable, GenericAlias, Type, Union
 
 from git import Repo
 from pydantic import BaseModel
@@ -23,6 +25,13 @@ from stores.tools import DEFAULT_TOOLS, REPLY
 
 logging.basicConfig()
 logger = logging.getLogger("stores.index")
+
+
+class ProviderFormat(str, Enum):
+    OPENAI_CHAT = "openai-chat-completions"
+    OPENAI_RESPONSES = "openai-responses"
+    ANTHROPIC = "anthropic"
+    GOOGLE_GEMINI = "google-gemini"
 
 
 def load_remote_index(index_id: str, branch_or_commit: str | None = None):
@@ -133,135 +142,156 @@ class Index(BaseModel):
         self.tools_dict[tool.__name__] = tool
         self._tool_indexes[tool.__name__] = index
 
-    def format_tools(self, provider: Literal["openai-chat-completions", "openai-responses", "anthropic", "google-gemini"]):
+    def _get_name(self, param: Type | GenericAlias, default: str = "STRING") -> str:
+        """Helper method to get the name of a type."""
+        try:
+            return param.__name__
+        except AttributeError:
+            return default
+
+    def _get_type_info(self, param_type, param):
+        """Helper method to get type information from a parameter type annotation."""
+        origin = typing.get_origin(param_type)
+        args = typing.get_args(param_type)
+        nullable = False
+
+        if origin is Union:
+            nullable = type(None) in args
+            types = [t for t in args if t is not type(None)]
+            param_type = types[0] if types else str
+            origin = typing.get_origin(param_type)
+            args = typing.get_args(param_type)
+        elif param.default is not inspect.Parameter.empty:
+            nullable = True
+
+        return origin, args, param_type, nullable
+
+    def format_tools(
+        self,
+        provider: ProviderFormat,
+    ):
+        """Format tools based on the provider's requirements."""
         formatted_tools = []
         standard_type_mappings = {
-            'str': 'string',
-            'int': 'integer',
-            'bool': 'boolean',
-            'float': 'number',
-            'list': 'array',
-            'NoneType': 'null',
+            "str": "string",
+            "int": "integer",
+            "bool": "boolean",
+            "float": "number",
+            "list": "array",
+            "NoneType": "null",
         }
         gemini_type_mappings = {
-            'str': 'STRING',
-            'int': 'NUMBER',
-            'bool': 'BOOLEAN',
-            'float': 'NUMBER',
-            'list': 'ARRAY',
-            'NoneType': 'null',
+            "str": "STRING",
+            "int": "NUMBER",
+            "bool": "BOOLEAN",
+            "float": "NUMBER",
+            "list": "ARRAY",
+            "NoneType": "null",
         }
-        for tool in self.tools_dict.items():
+
+        for tool in self.tools:
             # Extract parameters and their types from the tool's function signature
             signature = inspect.signature(tool)
             parameters = {}
             required_params = []
             for param_name, param in signature.parameters.items():
                 param_type = param.annotation
-                if provider == "google-gemini":
-                    # For google-gemini, handle Union types and simple types differently
-                    nullable = False
-                    if hasattr(param_type, '__origin__'):
-                        if param_type.__origin__ is Union:
-                            nullable = type(None) in param_type.__args__
-                            types = [t for t in param_type.__args__ if t is not type(None)]  # Get non-None types
-                            param_type = types[0] if types else str  # Use first non-None type or default to str
-                        elif param_type.__origin__ is list:
-                            type_name = "ARRAY"
-                            item_type = param_type.__args__[0].__name__ if param_type.__args__ else 'STRING'
-                            param_info = {
-                                "type": type_name,
-                                "items": {"type": gemini_type_mappings.get(item_type, item_type)},
-                                "description": ""
-                            }
-                            if nullable:
-                                param_info["nullable"] = True
-                            parameters[param_name] = param_info
-                            continue
-                    elif param.default is not param.empty:
-                        nullable = True
+                origin, args, param_type, nullable = self._get_type_info(
+                    param_type, param
+                )
+
+                if provider == ProviderFormat.GOOGLE_GEMINI:
+                    if origin is list:
+                        type_name = "ARRAY"
+                        item_type = self._get_name(args[0]) if args else "STRING"
+                        param_info = {
+                            "type": type_name,
+                            "items": {
+                                "type": gemini_type_mappings.get(item_type, item_type)
+                            },
+                            "description": "",
+                        }
+                        if nullable:
+                            param_info["nullable"] = True
+                        parameters[param_name] = param_info
+                        continue
 
                     # Get the type name from the actual type object
-                    type_name = param_type.__name__ if hasattr(param_type, '__name__') else 'STRING'
+                    type_name = self._get_name(param_type)
                     type_name = gemini_type_mappings.get(type_name, type_name)
-                    param_info = {
-                        "type": type_name,
-                        "description": ""
-                    }
+                    param_info = {"type": type_name, "description": ""}
                     if nullable:
                         param_info["nullable"] = True
                     parameters[param_name] = param_info
                 else:
-                    if hasattr(param_type, '__origin__') and param_type.__origin__ is list:
+                    if origin is list:
                         type_name = "array"
-                        item_type = param_type.__args__[0].__name__ if param_type.__args__ else 'string'
+                        item_type = (
+                            self._get_name(args[0], "string") if args else "string"
+                        )
                         parameters[param_name] = {
                             "type": type_name,
-                            "items": {"type": standard_type_mappings.get(item_type, item_type)}
+                            "items": {
+                                "type": standard_type_mappings.get(item_type, item_type)
+                            },
                         }
-                    elif hasattr(param_type, '__args__'):
-                        # Use array of types for union types
-                        types = [standard_type_mappings.get(t.__name__, str(t)) if hasattr(t, '__name__') else str(t) for t in param_type.__args__]
-                        parameters[param_name] = {"type": types}
                     else:
-                        type_name = standard_type_mappings.get(param_type.__name__, str(param_type)) if hasattr(param_type, '__name__') else str(param_type)
-                        # If parameter has a default value, include null type
-                        if param.default is not param.empty:
-                            parameters[param_name] = {"type": [type_name, "null"]}
-                        else:
-                            parameters[param_name] = {"type": type_name}
+                        # Handle both Union types and simple types
+                        types = [
+                            standard_type_mappings.get(
+                                self._get_name(t, str(t)), str(t)
+                            )
+                            for t in (args if args else [param_type])
+                        ]
+                        parameters[param_name] = {
+                            "type": types[0] if len(types) == 1 else types
+                        }
+
                 required_params.append(param_name)
 
             # Replace periods in function name with hyphens
-            formatted_tool_name = tool.__name__.replace('.', '-')
+            formatted_tool_name = tool.__name__.replace(".", "-")
 
             # Create formatted tool structure based on provider
-            if provider == "openai-chat-completions":
+            description = inspect.getdoc(tool) or "No description available."
+            base_params = {
+                "type": "object",
+                "properties": parameters,
+                "required": required_params,
+            }
+
+            if provider == ProviderFormat.OPENAI_CHAT:
                 formatted_tool = {
                     "type": "function",
                     "function": {
                         "name": formatted_tool_name,
-                        "description": tool.__doc__ or "No description available.",
-                        "parameters": {
-                            "type": "object",
-                            "properties": parameters,
-                            "required": required_params,
-                            "additionalProperties": False
-                        },
-                        "strict": True
-                    }
+                        "description": description,
+                        "parameters": {**base_params, "additionalProperties": False},
+                        "strict": True,
+                    },
                 }
-            elif provider == "openai-responses":
+            elif provider == ProviderFormat.OPENAI_RESPONSES:
                 formatted_tool = {
                     "type": "function",
                     "name": formatted_tool_name,
-                    "description": tool.__doc__ or "No description available.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": parameters,
-                        "required": required_params,
-                        "additionalProperties": False
-                    }
+                    "description": description,
+                    "parameters": {**base_params, "additionalProperties": False},
                 }
-            elif provider == "anthropic":
+            elif provider == ProviderFormat.ANTHROPIC:
                 formatted_tool = {
                     "name": formatted_tool_name,
-                    "description": tool.__doc__ or "No description available.",
-                    "input_schema": {
-                        "type": "object",
-                        "properties": parameters,
-                        "required": required_params
-                    }
+                    "description": description,
+                    "input_schema": base_params,
                 }
-            elif provider == "google-gemini":
+            elif provider == ProviderFormat.GOOGLE_GEMINI:
                 formatted_tool = {
                     "name": formatted_tool_name,
                     "parameters": {
                         "type": "OBJECT",
-                        "description": tool.__doc__ or "No description available.",
+                        "description": description,
                         "properties": parameters,
-                        "required": required_params
-                    }
+                        "required": required_params,
+                    },
                 }
             formatted_tools.append(formatted_tool)
         return formatted_tools

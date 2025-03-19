@@ -75,7 +75,10 @@ def parse_reddit_search(source: str, num_results: int | None = None):
 
 
 async def search_reddit(
-    query: str, subreddit: None | str = None, num_results: int = 10, latest: bool = False
+    query: str,
+    subreddit: None | str = None,
+    num_results: int = 10,
+    latest: bool = False,
 ) -> list[RedditResult]:
     """
     Retrieves Reddit search results for a query.

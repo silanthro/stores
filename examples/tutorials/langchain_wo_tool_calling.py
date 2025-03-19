@@ -10,10 +10,6 @@ import stores
 
 
 def main():
-    # Example request and system instruction to demonstrate the use of tools with LangChain
-    request = "Make up a parenting poem and email it to x@gmail.com"
-    system_instruction = "You are a helpful assistant who can generate poems in emails. When necessary, you have tools at your disposal."
-
     # Load custom tools and set the required environment variables
     index = stores.Index(
         ["./custom_tools"],
@@ -21,43 +17,49 @@ def main():
             "./custom_tools": {
                 "GMAIL_ADDRESS": os.environ["GMAIL_ADDRESS"],
                 "GMAIL_PASSWORD": os.environ["GMAIL_PASSWORD"],
-            },    
+            },
         },
     )
 
-    # Set up the initial message from the user to the model. stores.format_query
-    # will add the descriptions of the loaded tools to the user request.
+    # Set up the user request, system instruction, model parameters, tools, and initial messages
+    user_request = "Make up a parenting poem and email it to x@gmail.com"
+    system_instruction = "You are a helpful assistant who can generate poems in emails. You do not have to ask for confirmations."
+    model = "gemini-2.0-flash-001"
     messages = [
         {"role": "system", "content": system_instruction},
-        {"role": "user", "content": stores.format_query(request, index.tools)}
+        {
+            "role": "user",
+            "content": stores.format_query(user_request, index.tools),
+        },  # Describe the tools to the model
     ]
 
-    # Initialize the model with Gemini 2.0 Flash
-    model = ChatGoogleGenerativeAI(model="gemini-2.0-flash-001")
+    # Initialize the model with LangChain
+    model = ChatGoogleGenerativeAI(model=model)
 
-    # Get the response from the model
-    response = model.invoke(messages)
-    print(f"Assistant Response: {response.content}")
-    messages.append({"role": "assistant", "content": response.content})
+    # Run the agent loop
+    while True:
+        # Get the response from the model
+        response = model.invoke(messages)
 
-    # Because there is no native function calling, we need to parse the tool call from the response text
-    tool_call = stores.llm_parse_json(response.content)
-    print(f"Tool Call: {tool_call}")
+        # Append the assistant's response as context
+        messages.append({"role": "assistant", "content": response.content})
 
-    # Execute the tool
-    output = index.execute(tool_call.get("toolname"), tool_call.get("kwargs"))
-    print(f"Tool Output: {output}")
-    
-    # Gemini will only generate a response if the last message in messages is from the user role.
-    # For other models, you can set the role of the tool output to "tool". Example:
-    # messages.append({"role": "tool", "tool_call_id": tool_call.get("id"), "content": output})
-    messages.append({"role": "user", "content": f"Tool Output: {output}"})
+        # Because there is no native function calling, we need to parse the tool call from the response text
+        tool_call = stores.llm_parse_json(response.content)
+        print(f"Tool Call: {tool_call}")
 
-    # Get the final response from the model. The model will return a string with a REPLY tool call so 
-    # we need to parse and execute it.
-    final_response = model.invoke(messages)
-    final_response_text = index.parse_and_execute(final_response.content)
-    print(f"Assistant Response: {final_response_text}")
+        # If the REPLY tool is called, break the loop and return the message
+        if tool_call.get("toolname") == "REPLY":
+            print(f"Assistant Response: {tool_call.get('kwargs', {}).get('msg')}")
+            break
+
+        # Otherwise, execute the tool call
+        output = index.execute(tool_call.get("toolname"), tool_call.get("kwargs"))
+        messages.append(
+            {"role": "user", "content": f"Tool Output: {output}"}
+        )  # Some APIs require a tool role instead
+        print(f"Tool Output: {output}")
+
 
 if __name__ == "__main__":
     main()

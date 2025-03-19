@@ -1,6 +1,7 @@
 """
 This example shows how to use stores with Anthropic's API.
 """
+
 import os
 
 import anthropic
@@ -9,10 +10,6 @@ import stores
 
 
 def main():
-    # Example request and system prompt to demonstrate the use of tools with Anthropic
-    user_request = "Make up a parenting poem and email it to x@gmail.com"
-    system = "You are a helpful assistant who can generate poems. When necessary, you have tools at your disposal."
-
     # Load custom tools and set the required environment variables
     index = stores.Index(
         ["./custom_tools"],
@@ -20,59 +17,65 @@ def main():
             "./custom_tools": {
                 "GMAIL_ADDRESS": os.environ["GMAIL_ADDRESS"],
                 "GMAIL_PASSWORD": os.environ["GMAIL_PASSWORD"],
-            },    
+            },
         },
     )
 
-    # Set up the initial message from the user to the model
+    # Set up the user request, system instruction, model parameters, tools, and initial messages
+    user_request = "Make up a parenting poem and email it to x@gmail.com"
+    system_instruction = "You are a helpful assistant who can generate poems in emails. When necessary, you have tools at your disposal. Always use the REPLY tool when you have completed the task. You do not have to ask for confirmations."
+    model = "claude-3-5-sonnet-20241022"
+    max_tokens = 1024
+    tools = index.format_tools("anthropic")
     messages = [{"role": "user", "content": user_request}]
 
     # Initialize the model with Anthropic
     client = anthropic.Anthropic()
-    model = "claude-3-5-haiku-20241022"
 
-    # Get the response from the model
-    response = client.messages.create(
-        model=model,
-        max_tokens=1024,
-        system=system,
-        messages=messages,
-        tools=index.format_tools("anthropic"),
-    )
+    # Run the agent loop
+    while True:
+        # Get the response from the model
+        response = client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            system=system_instruction,
+            messages=messages,
+            tools=tools,
+        )
 
-    print(f"Assistant Response: {response.content}")
-    messages.append({"role": "assistant", "content": response.content})
-    
-    # Execute the tool calls
-    for blocks in response.content:
-        if blocks.type == "tool_use":
-            print(f"Tool Call: {blocks}")
-            name = blocks.name.replace("-", ".")
-            args = blocks.input
-            output = index.execute(name, args)
-            messages.append(
-                {
-                "role": "user", 
-                "content": [
+        # Append the assistant's response as context
+        messages.append({"role": "assistant", "content": response.content})
+
+        # Process the response, which includes both text and tool use
+        for blocks in response.content:
+            if blocks.type == "text":
+                print(f"Assistant Response: {blocks.text}")
+            elif blocks.type == "tool_use":
+                print(f"Tool Call: {blocks}")
+                name = blocks.name.replace("-", ".")
+                args = blocks.input
+
+                # If the REPLY tool is called, break the loop and return the message
+                if blocks.name == "REPLY":
+                    print(f"Assistant Response: {blocks.input['msg']}")
+                    return
+
+                # Otherwise, execute the tool call
+                output = index.execute(name, args)
+                messages.append(
                     {
-                    "type": "tool_result",
-                    "tool_use_id": blocks.id,
-                    "content": output
+                        "role": "user",  # Some APIs require a tool role instead
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": blocks.id,
+                                "content": str(output),
+                            }
+                        ],
                     }
-                ]
-                })
-            print(f"Tool Output: {output}")
+                )
+                print(f"Tool Output: {output}")
 
-    # Get the final response from the model
-    final_completion = client.messages.create(
-        model=model,
-        max_tokens=1024,
-        system=system,
-        messages=messages,
-        tools=index.format_tools("anthropic"),
-    )
-    
-    print(f"Assistant Response: {final_completion.content[0].text}")
 
 if __name__ == "__main__":
     main()

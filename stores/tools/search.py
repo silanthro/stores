@@ -58,7 +58,7 @@ class GoogleResult(TypedDict):
 
 
 async def google_search(
-    query: str, num_results: int = 10, news:bool = False
+    query: str, num_results: int = 10, news: bool = False
 ) -> list[GoogleResult]:
     """
     Retrieves Google or Google News search results for a query.

@@ -169,3 +169,12 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Cloned tools
+.tools/
+
+# macOS metadata file
+.DS_Store
+
+# Temp
+app/
