@@ -1,14 +1,8 @@
 from typing import List, Optional, Union
 
 import pytest
-from stores.index import Index, ProviderFormat
 
-
-@pytest.fixture
-def clean_index():
-    """Create a clean Index instance without default tools."""
-    index = Index(tools=[])
-    return index
+from stores.index import ProviderFormat
 
 
 def sample_tool(
@@ -34,6 +28,29 @@ def sample_tool(
     return "test"
 
 
+sample_tool_min_args = {
+    "str_param": {"type": "string"},
+    "int_param": {
+        "type": "integer",
+    },
+    "bool_param": {
+        "type": "boolean",
+    },
+    "float_param": {
+        "type": "number",
+    },
+    "list_param": {"type": "array", "items": {"type": "string"}},
+}
+
+
+def check_minimum_properties(input_dict: dict, model_dict: dict):
+    for key, value in model_dict.items():
+        if isinstance(value, dict):
+            check_minimum_properties(input_dict[key], value)
+        else:
+            assert value == input_dict[key]
+
+
 def test_openai_chat_format(clean_index):
     """Test OpenAI Chat format requirements."""
     clean_index.tools = [sample_tool]
@@ -44,12 +61,7 @@ def test_openai_chat_format(clean_index):
     params = tool["function"]["parameters"]
 
     # Test type mappings
-    assert params["properties"]["str_param"]["type"] == "string"
-    assert params["properties"]["int_param"]["type"] == "integer"
-    assert params["properties"]["bool_param"]["type"] == "boolean"
-    assert params["properties"]["float_param"]["type"] == "number"
-    assert params["properties"]["list_param"]["type"] == "array"
-    assert params["properties"]["list_param"]["items"]["type"] == "string"
+    check_minimum_properties(params["properties"], sample_tool_min_args)
 
     # Test structure requirements
     assert tool["function"]["strict"] is True
@@ -66,12 +78,7 @@ def test_openai_responses_format(clean_index):
     params = tool["parameters"]
 
     # Test type mappings
-    assert params["properties"]["str_param"]["type"] == "string"
-    assert params["properties"]["int_param"]["type"] == "integer"
-    assert params["properties"]["bool_param"]["type"] == "boolean"
-    assert params["properties"]["float_param"]["type"] == "number"
-    assert params["properties"]["list_param"]["type"] == "array"
-    assert params["properties"]["list_param"]["items"]["type"] == "string"
+    check_minimum_properties(params["properties"], sample_tool_min_args)
 
     # Test structure requirements
     assert params["additionalProperties"] is False
@@ -86,12 +93,7 @@ def test_anthropic_format(clean_index):
     params = tool["input_schema"]
 
     # Test type mappings
-    assert params["properties"]["str_param"]["type"] == "string"
-    assert params["properties"]["int_param"]["type"] == "integer"
-    assert params["properties"]["bool_param"]["type"] == "boolean"
-    assert params["properties"]["float_param"]["type"] == "number"
-    assert params["properties"]["list_param"]["type"] == "array"
-    assert params["properties"]["list_param"]["items"]["type"] == "string"
+    check_minimum_properties(params["properties"], sample_tool_min_args)
 
 
 def test_gemini_format(clean_index):
@@ -103,12 +105,7 @@ def test_gemini_format(clean_index):
     params = tool["parameters"]
 
     # Test standard type mappings
-    assert params["properties"]["str_param"]["type"] == "string"
-    assert params["properties"]["int_param"]["type"] == "integer"
-    assert params["properties"]["bool_param"]["type"] == "boolean"
-    assert params["properties"]["float_param"]["type"] == "number"
-    assert params["properties"]["list_param"]["type"] == "array"
-    assert params["properties"]["list_param"]["items"]["type"] == "string"
+    check_minimum_properties(params["properties"], sample_tool_min_args)
 
     # Test nullable field for optional parameters
     assert (
@@ -119,7 +116,7 @@ def test_gemini_format(clean_index):
     assert params["properties"]["str_param"]["nullable"] is False
 
 
-def test_list_type_formatting(clean_index):
+def test_list_type_formatting(clean_index, provider):
     """Test list type handling across providers."""
 
     def tool_with_lists(
@@ -131,43 +128,25 @@ def test_list_type_formatting(clean_index):
         """Tool with various list types."""
         pass
 
+    tool_with_lists_min_args = {
+        "str_list": {"type": "array", "items": {"type": "string"}},
+        "int_list": {"type": "array", "items": {"type": "integer"}},
+        "bool_list": {"type": "array", "items": {"type": "boolean"}},
+        "float_list": {"type": "array", "items": {"type": "number"}},
+    }
+
     clean_index.tools = [tool_with_lists]
+    provider_mappings = {
+        ProviderFormat.OPENAI_CHAT: ["function", "parameters", "properties"],
+        ProviderFormat.OPENAI_RESPONSES: ["parameters", "properties"],
+        ProviderFormat.GOOGLE_GEMINI: ["parameters", "properties"],
+        ProviderFormat.ANTHROPIC: ["input_schema", "properties"],
+    }
 
-    # Test OpenAI format
-    openai_tool = clean_index.format_tools(ProviderFormat.OPENAI_CHAT)[0]
-    params = openai_tool["function"]["parameters"]["properties"]
-    assert params["str_list"]["type"] == "array"
-    assert params["str_list"]["items"]["type"] == "string"
-    assert params["int_list"]["type"] == "array"
-    assert params["int_list"]["items"]["type"] == "integer"
-    assert params["bool_list"]["type"] == "array"
-    assert params["bool_list"]["items"]["type"] == "boolean"
-    assert params["float_list"]["type"] == "array"
-    assert params["float_list"]["items"]["type"] == "number"
-
-    # Test Gemini format
-    gemini_tool = clean_index.format_tools(ProviderFormat.GOOGLE_GEMINI)[0]
-    params = gemini_tool["parameters"]["properties"]
-    assert params["str_list"]["type"] == "array"
-    assert params["str_list"]["items"]["type"] == "string"
-    assert params["int_list"]["type"] == "array"
-    assert params["int_list"]["items"]["type"] == "integer"
-    assert params["bool_list"]["type"] == "array"
-    assert params["bool_list"]["items"]["type"] == "boolean"
-    assert params["float_list"]["type"] == "array"
-    assert params["float_list"]["items"]["type"] == "number"
-
-    # Test Anthropic format
-    anthropic_tool = clean_index.format_tools(ProviderFormat.ANTHROPIC)[0]
-    params = anthropic_tool["input_schema"]["properties"]
-    assert params["str_list"]["type"] == "array"
-    assert params["str_list"]["items"]["type"] == "string"
-    assert params["int_list"]["type"] == "array"
-    assert params["int_list"]["items"]["type"] == "integer"
-    assert params["bool_list"]["type"] == "array"
-    assert params["bool_list"]["items"]["type"] == "boolean"
-    assert params["float_list"]["type"] == "array"
-    assert params["float_list"]["items"]["type"] == "number"
+    output_format = clean_index.format_tools(provider)[0]
+    for key in provider_mappings[provider]:
+        output_format = output_format[key]
+    check_minimum_properties(output_format, tool_with_lists_min_args)
 
 
 def test_tool_metadata(clean_index):
@@ -189,7 +168,7 @@ def test_tool_metadata(clean_index):
     assert tool["function"]["description"] == "Tool description."
 
 
-def test_unsupported_type(clean_index):
+def test_unsupported_type(clean_index, provider):
     """Test that unsupported types raise TypeError."""
 
     def tool_with_set(param: set):  # set type is not supported
@@ -197,14 +176,10 @@ def test_unsupported_type(clean_index):
 
     clean_index.tools = [tool_with_set]
     with pytest.raises(TypeError, match="Unsupported type: set"):
-        clean_index.format_tools(ProviderFormat.OPENAI_CHAT)
-
-    # Test Gemini format - uses same error message
-    with pytest.raises(TypeError, match="Unsupported type: set"):
-        clean_index.format_tools(ProviderFormat.GOOGLE_GEMINI)
+        clean_index.format_tools(provider)
 
 
-def test_unsupported_array_type(clean_index):
+def test_unsupported_array_type(clean_index, provider):
     """Test that unsupported array item types raise TypeError."""
 
     def tool_with_set_array(param: List[set]):  # array of sets is not supported
@@ -212,11 +187,7 @@ def test_unsupported_array_type(clean_index):
 
     clean_index.tools = [tool_with_set_array]
     with pytest.raises(TypeError, match="Unsupported type for array items: set"):
-        clean_index.format_tools(ProviderFormat.OPENAI_CHAT)
-
-    # Test Gemini format - uses same error message
-    with pytest.raises(TypeError, match="Unsupported type for array items: set"):
-        clean_index.format_tools(ProviderFormat.GOOGLE_GEMINI)
+        clean_index.format_tools(provider)
 
 
 def test_empty_tools_list(clean_index):
@@ -254,14 +225,6 @@ def test_duplicate_tool_names(clean_index):
         """First tool."""
         pass
 
-    first_tool.__name__ = "tool_one"  # Set same name
-
-    def second_tool(param2: int):
-        """Second tool with same name."""
-        pass
-
-    second_tool.__name__ = "tool_one"  # Set same name
-
-    clean_index.tools = [first_tool, second_tool]  # Both tools have name "tool_one"
-    with pytest.raises(ValueError, match="Duplicate tool name: tool_one"):
+    clean_index.tools = [first_tool, first_tool]
+    with pytest.raises(ValueError, match="Duplicate tool name: first_tool"):
         clean_index.format_tools(ProviderFormat.OPENAI_CHAT)

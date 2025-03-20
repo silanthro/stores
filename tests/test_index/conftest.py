@@ -9,6 +9,9 @@ from typing import Optional, TypedDict
 
 import pytest
 
+from stores import Index
+from stores.index import ProviderFormat
+
 logging.basicConfig()
 logger = logging.getLogger("stores.test_index.conftest")
 logger.setLevel(logging.INFO)
@@ -249,4 +252,16 @@ def buggy_tool(request):
     ]
 )
 def buggy_index(request):
+    yield request.param
+
+
+@pytest.fixture
+def clean_index():
+    """Create a clean Index instance without default tools."""
+    index = Index(tools=[])
+    return index
+
+
+@pytest.fixture(params=ProviderFormat)
+def provider(request):
     yield request.param
