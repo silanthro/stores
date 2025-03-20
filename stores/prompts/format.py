@@ -23,9 +23,12 @@ def format_query(request: str, tools: list[Callable]):
     descriptions = [get_tool_description(t) for t in tools]
 
     return (
-        "Given the user request, return a JSON with keys `toolname` and `kwargs`. "
-        "Where `toolname` is a string representing the tool to call and `kwargs` is an object "
-        "corresponding to the required tool function inputs.\n"
+        "Given the user request, respond with a JSON object containing two keys: "
+        "'text' and 'tool_calls'. "
+        "The 'text' key should contain your text response to the user. "
+        "If a tool needs to be called, the 'tool_calls' key should be "
+        "a list of objects with 'toolname' (string) and 'kwargs' (object)."
+        "If no tool is needed, set 'tool_calls' to an empty list.\n"
         "Here are the tools available: "
         f"{descriptions}"
         f"User request: {request}"

@@ -40,28 +40,40 @@ def main():
     while True:
         # Get the response from the model
         response = llm.chat(messages)
-        response_text = str(response).split("assistant: ", 1)[
+        response_content = str(response).split("assistant: ", 1)[
             -1
         ]  # Get the content we want as a str
 
-        # Append the assistant's response as context
-        messages.append(ChatMessage(role="assistant", content=response_text))
+        # Check if the response contains only text and no tool calls, which indicates task completion for this example
+        parsed_response = stores.llm_parse_json(response_content)
+        text = parsed_response.get("text")
+        tool_calls = parsed_response.get("tool_calls")
 
-        # Because there is no native function calling, we need to parse the tool call from the response text
-        tool_call = stores.llm_parse_json(response_text)
-        print(f"Executing tool call: {tool_call}")
+        if text and tool_calls == []:
+            print(f"Assistant response: {text}")
+            return  # End the agent loop
 
-        # If the REPLY tool is called, break the loop and return the message
-        if tool_call.get("toolname") == "REPLY":
-            print(f"Assistant response: {tool_call.get('kwargs', {}).get('msg')}")
-            break
+        # Otherwise, process the response, which could include both text and tool calls
+        if text:
+            print(f"Assistant response: {text}")
+            messages.append(ChatMessage(role="assistant", content=text))
 
-        # Execute the tool
-        output = index.execute(tool_call.get("toolname"), tool_call.get("kwargs"))
-        messages.append(
-            ChatMessage(role="user", content=f"Tool output: {output}")
-        )  # Some APIs require a tool role instead
-        print(f"Tool output: {output}")
+        if tool_calls:
+            for tool_call in tool_calls:
+                name = tool_call.get("toolname")
+                args = tool_call.get("kwargs")
+
+                # Otherwise, execute the tool call
+                print(f"Executing tool call: {name}({args})")
+                output = index.execute(name, args)
+                print(f"Tool output: {output}")
+                messages.append(ChatMessage(role="assistant", content=str(tool_call)))  # Append the assistant's tool call as context
+                messages.append(
+                    ChatMessage(
+                        role="user",
+                        content=str(output),
+                    )
+                )  # Append the tool call result as context
 
 
 if __name__ == "__main__":
