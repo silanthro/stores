@@ -2,6 +2,7 @@ import asyncio
 import functools
 import importlib.util
 import inspect
+import json
 import logging
 import multiprocessing
 import os
@@ -24,6 +25,7 @@ from typing import (
     get_origin,
 )
 
+import requests
 import yaml
 from makefun import create_function
 
@@ -470,3 +472,20 @@ def wrap_tool(tool: Callable | Awaitable):
     wrapper.__signature__ = new_sig
 
     return wrapper
+
+
+def lookup_index(index_id: str, index_version: str | None = None):
+    response = requests.post(
+        "https://mnryl5tkkol3yitc3w2rupqbae0ovnej.lambda-url.us-east-1.on.aws/",
+        headers={
+            "content-type": "application/json",
+        },
+        data=json.dumps(
+            {
+                "index_id": index_id,
+                "index_version": index_version,
+            }
+        ),
+    )
+    if response.ok:
+        return response.json()

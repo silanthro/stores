@@ -8,6 +8,15 @@ logger = logging.getLogger("stores.test_index.text_index_utils")
 logger.setLevel(logging.INFO)
 
 
+def test_lookup_index():
+    index_metadata = utils.lookup_index("silanthro/send-gmail", "0.1.0")
+    assert index_metadata == {
+        "clone_url": "https://github.com/silanthro/send-gmail.git",
+        "commit": "9cde5755e9ecd627a6f303421031d2a7fef9427d",
+        "version": "0.1.0",
+    }
+
+
 def test_get_index_signatures(local_index_folder):
     signatures = utils.get_index_signatures(local_index_folder)
     assert signatures == [
