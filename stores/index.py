@@ -159,10 +159,12 @@ class Index(BaseModel):
         """Helper method to get type information from a parameter type annotation."""
         origin = typing.get_origin(param_type)
         args = typing.get_args(param_type)
-        nullable = False
+        # Check for default value first, as this applies regardless of type
+        nullable = param.default is not inspect.Parameter.empty
 
         if origin is Union:
-            nullable = type(None) in args
+            # For Union types, also check if None is one of the types
+            nullable = nullable or type(None) in args
             types = [t for t in args if t is not type(None)]
             if provider == ProviderFormat.GOOGLE_GEMINI:
                 # For Gemini, we only use the first type and track nullable
@@ -171,9 +173,7 @@ class Index(BaseModel):
                 args = typing.get_args(param_type)
             else:
                 # For OpenAI and Anthropic, we keep all types
-                return origin, types, param_type, False
-        elif param.default is not inspect.Parameter.empty:
-            nullable = True
+                return origin, types, param_type, nullable
 
         return origin, args, param_type, nullable
 
@@ -182,7 +182,21 @@ class Index(BaseModel):
         provider: ProviderFormat,
     ):
         """Format tools based on the provider's requirements."""
+        # Check for empty tools list first
+        if not self.tools:
+            raise ValueError("No tools provided to format")
+
         formatted_tools = []
+
+        # Check for duplicate tool names early
+        tool_names = [tool.__name__ for tool in self.tools]
+        seen_names = set()
+        for name in tool_names:
+            formatted_name = name.replace(".", "-")
+            if formatted_name in seen_names:
+                raise ValueError(f"Duplicate tool name: {formatted_name}")
+            seen_names.add(formatted_name)
+
         standard_type_mappings = {
             "str": "string",
             "int": "integer",
@@ -191,15 +205,6 @@ class Index(BaseModel):
             "list": "array",
             "NoneType": "null",
         }
-        gemini_type_mappings = {
-            "str": "STRING",
-            "int": "NUMBER",
-            "bool": "BOOLEAN",
-            "float": "NUMBER",
-            "list": "ARRAY",
-            "NoneType": "null",
-        }
-
         for tool in self.tools:
             # Extract parameters and their types from the tool's function signature
             signature = inspect.signature(tool)
@@ -213,27 +218,27 @@ class Index(BaseModel):
 
                 if provider == ProviderFormat.GOOGLE_GEMINI:
                     if origin is list:
-                        type_name = "ARRAY"
-                        item_type = self._get_name(args[0]) if args else "STRING"
+                        type_name = "array"
+                        item_type = self._get_name(args[0]) if args else "string"
+                        if item_type not in standard_type_mappings:
+                            raise TypeError(
+                                f"Unsupported type for array items: {item_type}"
+                            )
                         param_info = {
                             "type": type_name,
-                            "items": {
-                                "type": gemini_type_mappings.get(item_type, item_type)
-                            },
+                            "items": {"type": standard_type_mappings[item_type]},
                             "description": "",
                             "nullable": nullable,
                         }
-                        parameters[param_name] = param_info
-                        continue
-
-                    # Get the type name from the actual type object
-                    type_name = self._get_name(param_type)
-                    type_name = gemini_type_mappings.get(type_name, type_name)
-                    param_info = {
-                        "type": type_name,
-                        "description": "",
-                        "nullable": nullable,
-                    }
+                    else:
+                        type_name = self._get_name(param_type)
+                        if type_name not in standard_type_mappings:
+                            raise TypeError(f"Unsupported type: {type_name}")
+                        param_info = {
+                            "type": standard_type_mappings[type_name],
+                            "description": "",
+                            "nullable": nullable,
+                        }
                     parameters[param_name] = param_info
                 else:
                     if origin is list:
@@ -241,20 +246,23 @@ class Index(BaseModel):
                         item_type = (
                             self._get_name(args[0], "string") if args else "string"
                         )
+                        if item_type not in standard_type_mappings:
+                            raise TypeError(
+                                f"Unsupported type for array items: {item_type}"
+                            )
                         parameters[param_name] = {
                             "type": type_name,
-                            "items": {
-                                "type": standard_type_mappings.get(item_type, item_type)
-                            },
+                            "items": {"type": standard_type_mappings[item_type]},
                         }
                     else:
                         # Handle both Union types and simple types
-                        types = [
-                            standard_type_mappings.get(
-                                self._get_name(t, str(t)), str(t)
-                            )
-                            for t in (args if args else [param_type])
-                        ]
+                        types = []
+                        # Validate all types in the Union
+                        for t in args if args else [param_type]:
+                            type_name = self._get_name(t, str(t))
+                            if type_name not in standard_type_mappings:
+                                raise TypeError(f"Unsupported type: {type_name}")
+                            types.append(standard_type_mappings[type_name])
                         parameters[param_name] = {
                             "type": types[0] if len(types) == 1 else types
                         }
@@ -272,6 +280,7 @@ class Index(BaseModel):
                 "required": required_params,
             }
 
+            # Format tool based on provider
             if provider == ProviderFormat.OPENAI_CHAT:
                 formatted_tool = {
                     "type": "function",
@@ -305,6 +314,7 @@ class Index(BaseModel):
                         "required": required_params,
                     },
                 }
+
             formatted_tools.append(formatted_tool)
         return formatted_tools
 
