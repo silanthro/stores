@@ -67,7 +67,9 @@ def main():
                 print(f"Executing tool call: {name}({args})")
                 output = index.execute(name, args)
                 print(f"Tool output: {output}")
-                messages.append(ChatMessage(role="assistant", content=str(tool_call)))  # Append the assistant's tool call as context
+                messages.append(
+                    ChatMessage(role="assistant", content=str(tool_call))
+                )  # Append the assistant's tool call as context
                 messages.append(
                     ChatMessage(
                         role="user",

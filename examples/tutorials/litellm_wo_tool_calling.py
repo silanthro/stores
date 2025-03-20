@@ -3,7 +3,7 @@ This example shows how to use stores with LiteLLM without native function calls.
 """
 
 import os
-import json
+
 from litellm import completion
 
 import stores
