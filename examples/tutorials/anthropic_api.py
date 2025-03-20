@@ -51,7 +51,7 @@ def main():
 
         # Otherwise, process the response, which could include both text and tool use
         for block in blocks:
-            if block.type == "text":
+            if block.type == "text" and block.text:
                 print(f"Assistant response: {block.text}")
                 messages.append({"role": "assistant", "content": block.text})
             elif block.type == "tool_use":

@@ -51,7 +51,7 @@ def main():
 
         # Otherwise, process the response, which could include both text and tool calls
         for item in response.output:
-            if item.type == "text":
+            if item.type == "text" and item.text:
                 print(f"Assistant response: {item.text}")
                 messages.append({"role": "assistant", "content": item.text})
             elif item.type == "function_call":
