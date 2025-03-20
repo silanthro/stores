@@ -1,5 +1,5 @@
 """
-This example shows how to use stores with LlamaIndex with native function calls.
+This example shows how to use stores with a LlamaIndex agent.
 """
 
 import os
