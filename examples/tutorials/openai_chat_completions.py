@@ -44,23 +44,19 @@ def main():
             tools=tools,
         )
 
+        text = completion.choices[0].message.content
+        tool_calls = completion.choices[0].message.tool_calls
+
         # Check if the response contain only text and no function call, which indicates task completion for this example
-        if (
-            completion.choices[0].message.content
-            and not completion.choices[0].message.tool_calls
-        ):
-            print(f"Assistant response: {completion.choices[0].message.content}")
+        if text and not tool_calls:
+            print(f"Assistant response: {text}")
             return  # End the agent loop
 
         # Otherwise, process the response, which could include both text and tool calls
-        if completion.choices[0].message.content:
-            print(f"Assistant response: {completion.choices[0].message.content}")
-            messages.append(
-                {"role": "assistant", "content": completion.choices[0].message.content}
-            )
+        if text:
+            messages.append({"role": "assistant", "content": text})
 
-        if completion.choices[0].message.tool_calls:
-            tool_calls = completion.choices[0].message.tool_calls
+        if tool_calls:
             for tool_call in tool_calls:
                 name = tool_call.function.name.replace("-", ".")
                 args = json.loads(tool_call.function.arguments)

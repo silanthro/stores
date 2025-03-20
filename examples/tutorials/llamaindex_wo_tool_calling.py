@@ -71,10 +71,7 @@ def main():
                     ChatMessage(role="assistant", content=str(tool_call))
                 )  # Append the assistant's tool call as context
                 messages.append(
-                    ChatMessage(
-                        role="user",
-                        content=str(output),
-                    )
+                    ChatMessage(role="user", content=f"Tool output: {output}")
                 )  # Append the tool call result as context
 
 

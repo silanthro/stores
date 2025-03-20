@@ -41,18 +41,20 @@ def main():
         # Get the response from the model
         response = model_with_tools.invoke(messages)
 
+        text = response.content
+        tool_calls = response.tool_calls
+
         # Check if the response contains only text and no tool calls, which indicates task completion for this example
-        if response.content and not response.tool_calls:
-            print(f"Assistant response: {response.content}")
+        if text and not tool_calls:
+            print(f"Assistant response: {text}")
             return  # End the agent loop
 
         # Otherwise, process the response, which could include both text and tool calls
         messages.append(response)  # Append the response as context
-        if response.content:
-            print(f"Assistant response: {response.content}")
+        if text:
+            print(f"Assistant response: {text}")
 
-        if response.tool_calls:
-            tool_calls = response.tool_calls
+        if tool_calls:
             for tool_call in tool_calls:
                 name = tool_call["name"]
                 args = tool_call["args"]
