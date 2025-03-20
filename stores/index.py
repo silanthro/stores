@@ -279,6 +279,7 @@ class Index(BaseModel):
                 required_params.append(param_name)
 
             # Replace periods in function name with hyphens
+            # TODO: Move ./- replacement to tool wrapper
             formatted_tool_name = tool.__name__.replace(".", "-")
 
             # Create formatted tool structure based on provider
