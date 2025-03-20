@@ -33,6 +33,7 @@ class ProviderFormat(str, Enum):
     ANTHROPIC = "anthropic"
     GOOGLE_GEMINI = "google-gemini"
 
+
 def load_remote_index(
     index_id: str, branch_or_commit: str | None = None, env_vars: dict | None = None
 ):
@@ -154,7 +155,7 @@ class Index(BaseModel):
         except AttributeError:
             return default
 
-    def _get_type_info(self, param_type, param):
+    def _get_type_info(self, param_type, param, provider=None):
         """Helper method to get type information from a parameter type annotation."""
         origin = typing.get_origin(param_type)
         args = typing.get_args(param_type)
@@ -163,9 +164,14 @@ class Index(BaseModel):
         if origin is Union:
             nullable = type(None) in args
             types = [t for t in args if t is not type(None)]
-            param_type = types[0] if types else str
-            origin = typing.get_origin(param_type)
-            args = typing.get_args(param_type)
+            if provider == ProviderFormat.GOOGLE_GEMINI:
+                # For Gemini, we only use the first type and track nullable
+                param_type = types[0] if types else str
+                origin = typing.get_origin(param_type)
+                args = typing.get_args(param_type)
+            else:
+                # For OpenAI and Anthropic, we keep all types
+                return origin, types, param_type, False
         elif param.default is not inspect.Parameter.empty:
             nullable = True
 
@@ -202,7 +208,7 @@ class Index(BaseModel):
             for param_name, param in signature.parameters.items():
                 param_type = param.annotation
                 origin, args, param_type, nullable = self._get_type_info(
-                    param_type, param
+                    param_type, param, provider
                 )
 
                 if provider == ProviderFormat.GOOGLE_GEMINI:
@@ -215,18 +221,19 @@ class Index(BaseModel):
                                 "type": gemini_type_mappings.get(item_type, item_type)
                             },
                             "description": "",
+                            "nullable": nullable,
                         }
-                        if nullable:
-                            param_info["nullable"] = True
                         parameters[param_name] = param_info
                         continue
 
                     # Get the type name from the actual type object
                     type_name = self._get_name(param_type)
                     type_name = gemini_type_mappings.get(type_name, type_name)
-                    param_info = {"type": type_name, "description": ""}
-                    if nullable:
-                        param_info["nullable"] = True
+                    param_info = {
+                        "type": type_name,
+                        "description": "",
+                        "nullable": nullable,
+                    }
                     parameters[param_name] = param_info
                 else:
                     if origin is list:
