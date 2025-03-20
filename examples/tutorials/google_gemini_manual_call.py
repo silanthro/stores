@@ -11,6 +11,9 @@ import stores
 
 
 def main():
+    # Initialize Google Gemini client
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
     # Load custom tools and set the required environment variables
     index = stores.Index(
         ["silanthro/send-gmail"],
@@ -22,75 +25,27 @@ def main():
         },
     )
 
-    # Set up the user request, system instruction, model parameters, tools, and initial messages
-    user_request = "Make up a parenting poem and email it to x@gmail.com"
-    system_instruction = "You are a helpful assistant who can generate poems in emails. You do not have to ask for confirmations."
-    model = "gemini-2.0-flash"
-    tools = index.tools
-    messages = [
-        {"role": "user", "parts": [{"text": user_request}]},
-    ]
-
-    # Initialize the model
-    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    # Configure the model with tools
     config = types.GenerateContentConfig(
-        tools=tools,
-        system_instruction=system_instruction,
+        tools=index.tools,
         automatic_function_calling=types.AutomaticFunctionCallingConfig(
             disable=True  # Gemini automatically executes tool calls. This script shows how to manually execute tool calls.
         ),
     )
 
-    # Run the agent loop
-    while True:
-        # Get the response from the model
-        response = client.models.generate_content(
-            model=model, contents=messages, config=config
-        )
+    # Get the response from the model
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents="Send a haiku about dreams to x@gmail.com. Don't ask questions.",
+        config=config,
+    )
 
-        # Check if all parts contain only text and no function call, which indicates task completion for this example
-        parts = response.candidates[0].content.parts
-        if all(part.text and not part.function_call for part in parts):
-            print(f"Assistant response: {parts[0].text}")
-            return  # End the agent loop
-
-        # Otherwise, process the response, which could include both text and tool use
-        for part in parts:
-            if part.text:
-                print(f"Assistant response: {part.text}")
-                messages.append({"role": "assistant", "parts": [{"text": part.text}]})
-            elif part.function_call:
-                name = part.function_call.name
-                args = part.function_call.args
-
-                # If the REPLY tool is called, break the loop and return the message
-                if name == "REPLY":
-                    print(f"Assistant response: {args['msg']}")
-                    return  # End the agent loop
-
-                # Otherwise, execute the tool call
-                print(f"Executing tool call: {name}({args})")
-                output = index.execute(name, args)
-                print(f"Tool output: {output}")
-                messages.append(
-                    {
-                        "role": "assistant",
-                        "parts": [{"functionCall": part.function_call}],
-                    }
-                )  # Append the assistant's tool call as context
-                messages.append(
-                    {
-                        "role": "user",
-                        "parts": [
-                            {
-                                "functionResponse": {
-                                    "name": name,
-                                    "response": {"output": output},
-                                },
-                            }
-                        ],
-                    }
-                )  # Append the tool call result as context
+    # Execute the tool call
+    tool_call = response.candidates[0].content.parts[0].function_call
+    fn_name = tool_call.name
+    fn_args = tool_call.args
+    result = index.execute(fn_name, fn_args)
+    print(f"Tool output: {result}")
 
 
 if __name__ == "__main__":

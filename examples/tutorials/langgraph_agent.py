@@ -4,7 +4,7 @@ This example shows how to use stores with LangChain and a LangGraph agent.
 
 import os
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 
@@ -23,25 +23,20 @@ def main():
         },
     )
 
-    # Set up the user request, system instruction, model parameters, tools, and initial messages
-    user_request = "Make up a parenting poem and email it to x@gmail.com"
-    system_instruction = "You are a helpful assistant who can generate poems in emails. You do not have to ask for confirmations."
-    model = "gemini-2.0-flash-001"
-    messages = {
-        "messages": [
-            SystemMessage(content=system_instruction),
-            HumanMessage(content=user_request),
-        ]
-    }
-
-    # Initialize the agent with LangChain
-    agent_model = ChatGoogleGenerativeAI(model=model)
+    # Initialize the LangGraph agent
+    agent_model = ChatGoogleGenerativeAI(model="gemini-2.0-flash-001")
     agent_executor = create_react_agent(agent_model, index.tools)
 
-    # Run the agent. LangGraph agent will automatically end the loop when appropriate.
-    response = agent_executor.invoke(messages)
-
-    # Print the final response from the agent
+    # Get the response from the agent. The LangGraph agent will automatically execute the tool call.
+    response = agent_executor.invoke(
+        {
+            "messages": [
+                HumanMessage(
+                    content="Send a haiku about dreams to x@gmail.com. Don't ask questions."
+                )
+            ]
+        }
+    )
     print(f"Assistant response: {response['messages'][-1].content}")
 
 

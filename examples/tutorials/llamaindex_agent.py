@@ -23,23 +23,17 @@ def main():
         },
     )
 
-    # Set up the user request, model parameters, and tools
-    user_request = "Make up a parenting poem in an email and send it to x@gmail.com, without asking any questions"
-    model = "models/gemini-2.0-flash-001"
+    # Initialize the LlamaIndex agent with tools
+    llm = GoogleGenAI(model="models/gemini-2.0-flash-001")
     tools = [
         FunctionTool.from_defaults(fn=tool_function) for tool_function in index.tools
-    ]  # Convert tools to LlamaIndex FunctionTool format
-
-    # Initialize the model with Gemini
-    llm = GoogleGenAI(model=model)
-
-    # Create LlamaIndex agent with tools
+    ]  # Use LlamaIndex FunctionTool
     agent = AgentRunner.from_llm(tools, llm=llm, verbose=True)
 
-    # Run the agent. LlamaIndex agent will automatically end the loop when appropriate.
-    response = agent.chat(user_request)
-
-    # Print the final response from the agent
+    # Get the response from the LlamaIndex agent. LlamaIndex agent will automatically execute the tool call.
+    response = agent.chat(
+        "Send a haiku about dreams to x@gmail.com. Don't ask questions."
+    )
     print(f"Assistant response: {response}")
 
 

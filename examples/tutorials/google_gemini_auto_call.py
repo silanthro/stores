@@ -11,6 +11,9 @@ import stores
 
 
 def main():
+    # Initialize Google Gemini client
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
     # Load tools and set the required environment variables
     index = stores.Index(
         ["silanthro/send-gmail"],
@@ -22,21 +25,14 @@ def main():
         },
     )
 
-    # Set up the user request, system instruction, model parameters, and tools
-    user_request = "Make up a parenting poem and email it to x@gmail.com"
-    system_instruction = "You are a helpful assistant who can generate poems in emails. You do not have to ask for confirmations."
-    model = "gemini-2.0-flash"
-    tools = index.tools
+    # Initialize the chat with the model
+    config = types.GenerateContentConfig(tools=index.tools)
+    chat = client.chats.create(model="gemini-2.0-flash", config=config)
 
-    # Initialize the chat with the model, tools, and system instruction
-    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-    config = types.GenerateContentConfig(
-        tools=tools, system_instruction=system_instruction
+    # Get the response from the model. Gemini will automatically execute the tool call.
+    response = chat.send_message(
+        "Send a haiku about dreams to x@gmail.com. Don't ask questions."
     )
-    chat = client.chats.create(model=model, config=config)
-
-    # Get the final response from the model. Gemini will automatically execute the tools when necessary.
-    response = chat.send_message(user_request)
     print(f"Assistant response: {response.candidates[0].content.parts[0].text}")
 
 

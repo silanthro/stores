@@ -5,7 +5,6 @@ tools:
   - sandbox.run_python_code
   - run_subprocess.run_subprocess
   - news.reddit.search_reddit
-  - summarize.summarize
 
 env_vars:
   - GMAIL_ADDRESS:

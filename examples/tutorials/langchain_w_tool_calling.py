@@ -4,7 +4,6 @@ This example shows how to use stores with LangChain with native function calls.
 
 import os
 
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 import stores
@@ -22,56 +21,21 @@ def main():
         },
     )
 
-    # Set up the user request, system instruction, model parameters, tools, and initial messages
-    user_request = "Make up a parenting poem and email it to x@gmail.com"
-    system_instruction = "You are a helpful assistant who can generate poems in emails. You do not have to ask for confirmations."
-    model = "gemini-2.0-flash-001"
-    tools = index.tools
-    messages = [
-        SystemMessage(content=system_instruction),
-        HumanMessage(content=user_request),
-    ]
+    # Initialize the model with tools
+    model = ChatGoogleGenerativeAI(model="gemini-2.0-flash-001")
+    model_with_tools = model.bind_tools(index.tools)
 
-    # Initialize the model with LangChain
-    model = ChatGoogleGenerativeAI(model=model)
-    model_with_tools = model.bind_tools(tools)
+    # Get the response from the model
+    response = model_with_tools.invoke(
+        "Send a haiku about dreams to x@gmail.com. Don't ask questions."
+    )
 
-    # Run the agent loop
-    while True:
-        # Get the response from the model
-        response = model_with_tools.invoke(messages)
-
-        text = response.content
-        tool_calls = response.tool_calls
-
-        # Check if the response contains only text and no tool calls, which indicates task completion for this example
-        if text and not tool_calls:
-            print(f"Assistant response: {text}")
-            return  # End the agent loop
-
-        # Otherwise, process the response, which could include both text and tool calls
-        messages.append(response)  # Append the response as context
-        if text:
-            print(f"Assistant response: {text}")
-
-        if tool_calls:
-            for tool_call in tool_calls:
-                name = tool_call["name"]
-                args = tool_call["args"]
-
-                # If the REPLY tool is called, break the loop and return the message
-                if name == "REPLY":
-                    print(f"Assistant response: {args['msg']}")
-                    return
-
-                # Otherwise, execute the tool call
-                print(f"Executing tool call: {name}({args})")
-                selected_tool = index.tools_dict[name]
-                output = selected_tool(**args)
-                print(f"Tool Output: {output}")
-                messages.append(
-                    ToolMessage(content=output, tool_call_id=tool_call["id"])
-                )  # Append the tool call result as context
+    # Execute the tool call
+    tool_call = response.tool_calls[0]
+    fn_name = tool_call["name"]
+    fn_args = tool_call["args"]
+    result = index.execute(fn_name, fn_args)
+    print(f"Tool output: {result}")
 
 
 if __name__ == "__main__":
