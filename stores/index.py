@@ -14,6 +14,7 @@ from stores.index_utils import (
     get_index_signatures,
     get_index_tools,
     install_venv_deps,
+    lookup_index,
     run_mp_process,
     wrap_remote_tool,
     wrap_tool,
@@ -26,15 +27,21 @@ logger = logging.getLogger("stores.index")
 
 
 def load_remote_index(
-    index_id: str, branch_or_commit: str | None = None, env_vars: dict | None = None
+    index_id: str, commit_like: str | None = None, env_vars: dict | None = None
 ):
     index_folder = CACHE_DIR / index_id
     if not index_folder.exists():
-        # TODO: Update to use DB
-        repo_url = f"https://github.com/{index_id}.git"
+        # Lookup Stores DB
+        index_metadata = lookup_index(index_id, commit_like)
+        if index_metadata:
+            repo_url = index_metadata["clone_url"]
+            commit_like = index_metadata["commit"]
+        else:
+            # Otherwise, assume index references a GitHub repo
+            repo_url = f"https://github.com/{index_id}.git"
         repo = Repo.clone_from(repo_url, index_folder)
-        if branch_or_commit:
-            repo.git.checkout(branch_or_commit)
+        if commit_like:
+            repo.git.checkout(commit_like)
     # Create venv and install deps
     venv_folder = index_folder / VENV_NAME
     if not venv_folder.exists():
@@ -108,11 +115,11 @@ class Index(BaseModel):
                     # Load remote index
                     try:
                         index_env_vars = env_vars.get(index_name)
-                        branch_or_commit = None
+                        commit_like = None  # Version or branch or commit
                         if ":" in index_name:
-                            index_name, branch_or_commit = index_name.split(":")
+                            index_name, commit_like = index_name.split(":")
                         loaded_index = load_remote_index(
-                            index_name, branch_or_commit, index_env_vars
+                            index_name, commit_like, index_env_vars
                         )
                         self._index_paths[index_name] = str(CACHE_DIR / index_name)
                     except Exception:
