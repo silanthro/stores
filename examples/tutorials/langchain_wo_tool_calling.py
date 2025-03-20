@@ -41,11 +41,11 @@ def main():
         # Get the response from the model
         response = model.invoke(messages)
 
-        # Check if the response contains only text and no tool calls, which indicates task completion for this example
         parsed_response = stores.llm_parse_json(response.content)
         text = parsed_response.get("text")
         tool_calls = parsed_response.get("tool_calls")
 
+        # Check if the response contains only text and no tool calls, which indicates task completion for this example
         if text and tool_calls == []:
             print(f"Assistant response: {text}")
             return  # End the agent loop
@@ -70,7 +70,7 @@ def main():
                 messages.append(
                     {
                         "role": "user",
-                        "content": str(output),
+                        "content": f"Tool output: {output}",
                     }
                 )  # Append the tool call result as context
 

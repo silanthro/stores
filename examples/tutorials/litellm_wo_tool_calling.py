@@ -72,7 +72,7 @@ def main():
                 messages.append(
                     {
                         "role": "user",
-                        "content": str(output),
+                        "content": f"Tool output: {output}",
                     }
                 )  # Append the tool call result as context
 
