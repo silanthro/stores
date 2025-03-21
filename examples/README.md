@@ -8,7 +8,7 @@ The `tutorials` directory contains example scripts demonstrating how to use Stor
 
 The example scripts are tool calling or agent workflows to generate a haiku about dreams and email it to a recipient. They leverage the LLM's ability to generate text and call tools (added via Stores) to send the email.
 
-| Description                                   | File Name                      |
+| API or Framework                              | File Name                      |
 | --------------------------------------------- | ------------------------------ |
 | OpenAI's Chat Completions API                 | `openai_chat_completions.py`   |
 | OpenAI's Response API                         | `openai_responses.py`          |
@@ -53,7 +53,7 @@ pip install -e ".[litellm]"
 pip install -e ".[llamaindex]"
 ```
 
-## Environment Variables
+## Environment variables
 
 The tutorial scripts require the following environment variables:
 
