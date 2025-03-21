@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import logging
 import venv
+from collections import Counter
 from pathlib import Path
 from typing import Callable
 
@@ -149,8 +150,6 @@ class Index(BaseModel):
         self.tools_dict[tool.__name__] = tool
         self._tool_indexes[tool.__name__] = index
 
-        # Check for default value first, as this applies regardless of type
-        nullable = param.default is not inspect.Parameter.empty
     def format_tools(
         self,
         provider: ProviderFormat,
@@ -162,14 +161,11 @@ class Index(BaseModel):
 
         formatted_tools = []
 
-        # Check for duplicate tool names early
-        tool_names = [tool.__name__ for tool in self.tools]
-        seen_names = set()
-        for name in tool_names:
-            formatted_name = name.replace(".", "-")
-            if formatted_name in seen_names:
-                raise ValueError(f"Duplicate tool name: {formatted_name}")
-            seen_names.add(formatted_name)
+        # Check for duplicate tool names
+        tool_name_counts = Counter([tool.__name__ for tool in self.tools])
+        duplicates = [name for name in tool_name_counts if tool_name_counts[name] > 1]
+        if duplicates:
+            raise ValueError(f"Duplicate tool names: {duplicates}")
 
         for tool in self.tools:
             # Extract parameters and their types from the tool's function signature
