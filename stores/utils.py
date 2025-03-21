@@ -36,7 +36,7 @@ def get_type_info(param_type, param: inspect.Parameter, provider: ProviderFormat
     return args, param_type, nullable
 
 
-def get_types(param: Type | GenericAlias, default: str = "string") -> List[str]:
+def get_types(param: Type | GenericAlias, nullable: bool = False) -> List[str]:
     """Helper method to get all the types."""
     type_mappings = {
         "str": "string",
@@ -53,18 +53,29 @@ def get_types(param: Type | GenericAlias, default: str = "string") -> List[str]:
 
     # If the parameter is a Union (like Union[int, str] or Optional[int])
     if origin is Union:
-        # Handle Optional (which is a Union with NoneType)
-        if len(args) == 2 and type(None) in args:
-            # Return the non-nullable type (e.g., Optional[int] returns "integer")
-            return get_types(args[0])
-        # For other Union types, return their types
-        return [get_types(t) for t in args]
+        types = []
+        has_none = False
+        for t in args:
+            if t is type(None):
+                has_none = True
+                continue
+            types.extend(get_types(t))
+        if has_none or nullable:
+            types.append("null")
+        return types
 
     # If the param is a simple type (not Union, not Optional)
     try:
         type_name = param.__name__.lower()
         if type_name not in type_mappings:
             raise TypeError(f"Unsupported type: {param.__name__}")
-        return [type_mappings[type_name]]
+        types = [type_mappings[type_name]]
+        # Handle simple type with a default value
+        if nullable:
+            types.append("null")
+        return types
     except (AttributeError, KeyError):
-        return [default]
+        types = ["string"]
+        if nullable:
+            types.append("null")
+        return types

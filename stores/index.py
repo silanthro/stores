@@ -165,7 +165,7 @@ class Index(BaseModel):
         tool_name_counts = Counter([tool.__name__ for tool in self.tools])
         duplicates = [name for name in tool_name_counts if tool_name_counts[name] > 1]
         if duplicates:
-            raise ValueError(f"Duplicate tool names: {duplicates}")
+            raise ValueError(f"Duplicate tool name(s): {duplicates}")
 
         for tool in self.tools:
             # Extract parameters and their types from the tool's function signature
@@ -178,7 +178,7 @@ class Index(BaseModel):
                     param_type, param, provider
                 )
 
-                types = get_types(processed_type)
+                types = get_types(processed_type, nullable)
 
                 param_info = {
                     "type": types[0] if len(types) == 1 else types,
@@ -188,7 +188,7 @@ class Index(BaseModel):
                     param_info["nullable"] = nullable
 
                 if types[0] == "array":
-                    item_type = get_types(args[0] if args else "str")[0]
+                    item_type = get_types(args[0] if args else "str", nullable)[0]
                     param_info["items"] = {"type": item_type}
 
                 parameters[param_name] = param_info
@@ -235,7 +235,7 @@ class Index(BaseModel):
                 formatted_tool = {
                     "name": formatted_tool_name,
                     "parameters": {
-                        "type": "OBJECT",
+                        "type": "object",
                         "description": description,
                         "properties": parameters,
                         "required": required_params,
