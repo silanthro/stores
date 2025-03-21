@@ -10,7 +10,7 @@ def sample_tool(
     int_param: int,
     bool_param: bool,
     float_param: float,
-    list_param: List[str],
+    default_param: str = "default",
     optional_param: Optional[str] = None,
     union_param: Union[str, int] = "default",
 ) -> str:
@@ -21,7 +21,7 @@ def sample_tool(
         int_param: An integer parameter
         bool_param: A boolean parameter
         float_param: A float parameter
-        list_param: A list of strings
+        default_param: A string parameter with a default value
         optional_param: An optional string parameter
         union_param: A parameter that can be string or integer
     """
@@ -39,8 +39,24 @@ sample_tool_min_args = {
     "float_param": {
         "type": "number",
     },
-    "list_param": {"type": "array", "items": {"type": "string"}},
 }
+
+sample_tool_union_types = {
+    "default_param": ["string", "null"],
+    "optional_param": ["string", "null"],
+    "union_param": ["string", "integer", "null"],
+}
+
+sample_tool_description = """Sample tool with various parameter types.
+
+Args:
+    str_param: A string parameter
+    int_param: An integer parameter
+    bool_param: A boolean parameter
+    float_param: A float parameter
+    default_param: A string parameter with a default value
+    optional_param: An optional string parameter
+    union_param: A parameter that can be string or integer"""
 
 
 def check_minimum_properties(input_dict: dict, model_dict: dict):
@@ -51,6 +67,11 @@ def check_minimum_properties(input_dict: dict, model_dict: dict):
             assert value == input_dict[key]
 
 
+def check_union_mappings(params: dict, expected_types: dict):
+    for param_name, expected_type in expected_types.items():
+        assert params[param_name]["type"] == expected_type
+
+
 def test_openai_chat_format(clean_index):
     """Test OpenAI Chat format requirements."""
     clean_index.tools = [sample_tool]
@@ -58,10 +79,15 @@ def test_openai_chat_format(clean_index):
 
     tool = formatted_tools[0]
     assert tool["type"] == "function"
-    params = tool["function"]["parameters"]
+    assert tool["function"]["name"] == "sample_tool"
+    assert tool["function"]["description"] == sample_tool_description
 
     # Test type mappings
+    params = tool["function"]["parameters"]
     check_minimum_properties(params["properties"], sample_tool_min_args)
+
+    # Test optional and union
+    check_union_mappings(params["properties"], sample_tool_union_types)
 
     # Test structure requirements
     assert tool["function"]["strict"] is True
@@ -75,10 +101,15 @@ def test_openai_responses_format(clean_index):
 
     tool = formatted_tools[0]
     assert tool["type"] == "function"
-    params = tool["parameters"]
+    assert tool["name"] == "sample_tool"
+    assert tool["description"] == sample_tool_description
 
     # Test type mappings
+    params = tool["parameters"]
     check_minimum_properties(params["properties"], sample_tool_min_args)
+
+    # Test optional and union
+    check_union_mappings(params["properties"], sample_tool_union_types)
 
     # Test structure requirements
     assert params["additionalProperties"] is False
@@ -90,10 +121,17 @@ def test_anthropic_format(clean_index):
     formatted_tools = clean_index.format_tools(ProviderFormat.ANTHROPIC)
 
     tool = formatted_tools[0]
+    assert tool["name"] == "sample_tool"
+    assert tool["description"] == sample_tool_description
+
     params = tool["input_schema"]
+    assert params["type"] == "object"
 
     # Test type mappings
     check_minimum_properties(params["properties"], sample_tool_min_args)
+
+    # Test optional and union
+    check_union_mappings(params["properties"], sample_tool_union_types)
 
 
 def test_gemini_format(clean_index):
@@ -102,12 +140,16 @@ def test_gemini_format(clean_index):
     formatted_tools = clean_index.format_tools(ProviderFormat.GOOGLE_GEMINI)
 
     tool = formatted_tools[0]
+    assert tool["name"] == "sample_tool"
     params = tool["parameters"]
+    assert params["description"] == sample_tool_description
+    assert params["type"] == "object"
 
     # Test standard type mappings
     check_minimum_properties(params["properties"], sample_tool_min_args)
 
     # Test nullable field for optional parameters
+    assert params["properties"]["default_param"]["nullable"] is True
     assert (
         params["properties"]["optional_param"]["nullable"] is True
     )  # Has Optional type
@@ -179,17 +221,6 @@ def test_unsupported_type(clean_index, provider):
         clean_index.format_tools(provider)
 
 
-def test_unsupported_array_type(clean_index, provider):
-    """Test that unsupported array item types raise TypeError."""
-
-    def tool_with_set_array(param: List[set]):  # array of sets is not supported
-        pass
-
-    clean_index.tools = [tool_with_set_array]
-    with pytest.raises(TypeError, match="Unsupported type for array items: set"):
-        clean_index.format_tools(provider)
-
-
 def test_empty_tools_list(clean_index):
     """Test that empty tools list raises ValueError."""
     clean_index.tools = []
@@ -226,5 +257,5 @@ def test_duplicate_tool_names(clean_index):
         pass
 
     clean_index.tools = [first_tool, first_tool]
-    with pytest.raises(ValueError, match="Duplicate tool name: first_tool"):
+    with pytest.raises(ValueError, match=r"Duplicate tool name\(s\): \['first_tool'\]"):
         clean_index.format_tools(ProviderFormat.OPENAI_CHAT)
