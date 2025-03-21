@@ -1,11 +1,9 @@
 import asyncio
 import inspect
 import logging
-import typing
 import venv
-from enum import Enum
 from pathlib import Path
-from typing import Callable, GenericAlias, Type, Union
+from typing import Callable
 
 from git import Repo
 from pydantic import BaseModel
@@ -23,16 +21,10 @@ from stores.index_utils import (
 )
 from stores.parsing import llm_parse_json
 from stores.tools import DEFAULT_TOOLS, REPLY
+from stores.utils import ProviderFormat, get_type_info, get_types
 
 logging.basicConfig()
 logger = logging.getLogger("stores.index")
-
-
-class ProviderFormat(str, Enum):
-    OPENAI_CHAT = "openai-chat-completions"
-    OPENAI_RESPONSES = "openai-responses"
-    ANTHROPIC = "anthropic"
-    GOOGLE_GEMINI = "google-gemini"
 
 
 def load_remote_index(
@@ -157,35 +149,8 @@ class Index(BaseModel):
         self.tools_dict[tool.__name__] = tool
         self._tool_indexes[tool.__name__] = index
 
-    def _get_name(self, param: Type | GenericAlias, default: str = "STRING") -> str:
-        """Helper method to get the name of a type."""
-        try:
-            return param.__name__
-        except AttributeError:
-            return default
-
-    def _get_type_info(self, param_type, param, provider=None):
-        """Helper method to get type information from a parameter type annotation."""
-        origin = typing.get_origin(param_type)
-        args = typing.get_args(param_type)
         # Check for default value first, as this applies regardless of type
         nullable = param.default is not inspect.Parameter.empty
-
-        if origin is Union:
-            # For Union types, also check if None is one of the types
-            nullable = nullable or type(None) in args
-            types = [t for t in args if t is not type(None)]
-            if provider == ProviderFormat.GOOGLE_GEMINI:
-                # For Gemini, we only use the first type and track nullable
-                param_type = types[0] if types else str
-                origin = typing.get_origin(param_type)
-                args = typing.get_args(param_type)
-            else:
-                # For OpenAI and Anthropic, we keep all types
-                return origin, types, param_type, nullable
-
-        return origin, args, param_type, nullable
-
     def format_tools(
         self,
         provider: ProviderFormat,
@@ -206,14 +171,6 @@ class Index(BaseModel):
                 raise ValueError(f"Duplicate tool name: {formatted_name}")
             seen_names.add(formatted_name)
 
-        standard_type_mappings = {
-            "str": "string",
-            "int": "integer",
-            "bool": "boolean",
-            "float": "number",
-            "list": "array",
-            "NoneType": "null",
-        }
         for tool in self.tools:
             # Extract parameters and their types from the tool's function signature
             signature = inspect.signature(tool)
@@ -221,60 +178,24 @@ class Index(BaseModel):
             required_params = []
             for param_name, param in signature.parameters.items():
                 param_type = param.annotation
-                origin, args, param_type, nullable = self._get_type_info(
+                args, processed_type, nullable = get_type_info(
                     param_type, param, provider
                 )
 
+                types = get_types(processed_type)
+
+                param_info = {
+                    "type": types[0] if len(types) == 1 else types,
+                    "description": "",
+                }
                 if provider == ProviderFormat.GOOGLE_GEMINI:
-                    if origin is list:
-                        type_name = "array"
-                        item_type = self._get_name(args[0]) if args else "string"
-                        if item_type not in standard_type_mappings:
-                            raise TypeError(
-                                f"Unsupported type for array items: {item_type}"
-                            )
-                        param_info = {
-                            "type": type_name,
-                            "items": {"type": standard_type_mappings[item_type]},
-                            "description": "",
-                            "nullable": nullable,
-                        }
-                    else:
-                        type_name = self._get_name(param_type)
-                        if type_name not in standard_type_mappings:
-                            raise TypeError(f"Unsupported type: {type_name}")
-                        param_info = {
-                            "type": standard_type_mappings[type_name],
-                            "description": "",
-                            "nullable": nullable,
-                        }
-                    parameters[param_name] = param_info
-                else:
-                    if origin is list:
-                        type_name = "array"
-                        item_type = (
-                            self._get_name(args[0], "string") if args else "string"
-                        )
-                        if item_type not in standard_type_mappings:
-                            raise TypeError(
-                                f"Unsupported type for array items: {item_type}"
-                            )
-                        parameters[param_name] = {
-                            "type": type_name,
-                            "items": {"type": standard_type_mappings[item_type]},
-                        }
-                    else:
-                        # Handle both Union types and simple types
-                        types = []
-                        # Validate all types in the Union
-                        for t in args if args else [param_type]:
-                            type_name = self._get_name(t, str(t))
-                            if type_name not in standard_type_mappings:
-                                raise TypeError(f"Unsupported type: {type_name}")
-                            types.append(standard_type_mappings[type_name])
-                        parameters[param_name] = {
-                            "type": types[0] if len(types) == 1 else types
-                        }
+                    param_info["nullable"] = nullable
+
+                if types[0] == "array":
+                    item_type = get_types(args[0] if args else "str")[0]
+                    param_info["items"] = {"type": item_type}
+
+                parameters[param_name] = param_info
 
                 required_params.append(param_name)
 
