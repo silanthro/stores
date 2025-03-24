@@ -95,11 +95,23 @@ def get_param_type(param_type: type):
 def parse_param_type(param_dict: dict) -> type:
     if param_dict["type"] == "array":
         child_types = [parse_param_type(a) for a in param_dict["items"]]
-        return list[*child_types]
+        child_union = child_types[0]
+        for child_type in child_types[1:]:
+            child_union = child_union | child_type
+        return list[child_union]
+    if param_dict["type"] == "union":
+        child_types = [parse_param_type(a) for a in param_dict["items"]]
+        union_type = child_types[0]
+        for child_type in child_types[1:]:
+            union_type = union_type | child_type
+        return union_type
     if param_dict["type"] == "enum":
         return Enum(param_dict["type_name"], param_dict["enum"])
     if param_dict["type"] == "object":
-        return TypedDict(param_dict["type_name"], param_dict["properties"])
+        properties = {}
+        for k, v in param_dict["properties"].items():
+            properties[k] = parse_param_type(v)
+        return TypedDict(param_dict["type_name"], properties)
     return param_dict["type"]
 
 
@@ -409,14 +421,7 @@ def wrap_remote_tool(
     if return_type_metadata == Parameter.empty:
         return_type = Parameter.empty
     else:
-        if return_type_metadata["type"] == "object":
-            return_type = TypedDict(
-                param["type_name"], return_type_metadata["properties"]
-            )
-        elif return_type_metadata["type"] == "enum":
-            return_type = Enum(param["type_name"], return_type_metadata["enum"])
-        else:
-            return_type = return_type_metadata["type"]
+        return_type = parse_param_type(return_type_metadata)
     signature = inspect.Signature(params, return_annotation=return_type)
     func = create_function(
         signature,
