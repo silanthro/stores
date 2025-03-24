@@ -194,10 +194,6 @@ class Index(BaseModel):
 
                 required_params.append(param_name)
 
-            # Replace periods in function name with hyphens
-            # TODO: Move ./- replacement to tool wrapper
-            formatted_tool_name = tool.__name__.replace(".", "-")
-
             # Create formatted tool structure based on provider
             description = inspect.getdoc(tool) or "No description available."
             base_params = {
@@ -211,7 +207,7 @@ class Index(BaseModel):
                 formatted_tool = {
                     "type": "function",
                     "function": {
-                        "name": formatted_tool_name,
+                        "name": tool.__name__,
                         "description": description,
                         "parameters": {**base_params, "additionalProperties": False},
                         "strict": True,
@@ -220,19 +216,19 @@ class Index(BaseModel):
             elif provider == ProviderFormat.OPENAI_RESPONSES:
                 formatted_tool = {
                     "type": "function",
-                    "name": formatted_tool_name,
+                    "name": tool.__name__,
                     "description": description,
                     "parameters": {**base_params, "additionalProperties": False},
                 }
             elif provider == ProviderFormat.ANTHROPIC:
                 formatted_tool = {
-                    "name": formatted_tool_name,
+                    "name": tool.__name__,
                     "description": description,
                     "input_schema": base_params,
                 }
             elif provider == ProviderFormat.GOOGLE_GEMINI:
                 formatted_tool = {
-                    "name": formatted_tool_name,
+                    "name": tool.__name__,
                     "parameters": {
                         "type": "object",
                         "description": description,
