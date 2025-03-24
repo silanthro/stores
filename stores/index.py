@@ -21,8 +21,8 @@ from stores.index_utils import (
     wrap_tool,
 )
 from stores.parsing import llm_parse_json
-from stores.tools import DEFAULT_TOOLS, REPLY
 from stores.utils import ProviderFormat, get_type_info, get_types
+from stores.tools import REPLY
 
 logging.basicConfig()
 logger = logging.getLogger("stores.index")
@@ -96,8 +96,7 @@ class Index(BaseModel):
         )
         self._tool_indexes = {}
         self._index_paths = {}
-        if tools is None:
-            tools = DEFAULT_TOOLS
+        tools = tools or []
         tools.append(REPLY)
 
         for tool in tools:
