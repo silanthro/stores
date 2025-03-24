@@ -1,0 +1,10 @@
+[index]
+
+tools = [
+    "tools.foo",
+    "tools.foo_w_return_type",
+    "tools.async_foo",
+    "tools.enum_input",
+    "tools.typed_dict_input",
+    "hello.world",
+]

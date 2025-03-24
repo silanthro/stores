@@ -26,8 +26,13 @@ from typing import (
 )
 
 import requests
-import yaml
 from makefun import create_function
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
+
 
 logging.basicConfig()
 logger = logging.getLogger("stores.index_utils")
@@ -36,7 +41,7 @@ logger.setLevel(logging.INFO)
 # TODO: CACHE_DIR might resolve differently
 CACHE_DIR = Path(".tools")
 VENV_NAME = ".venv"
-TOOLS_CONFIG_FILENAME = "TOOLS.yml"
+TOOLS_CONFIG_FILENAME = "tools.toml"
 
 
 class ToolMetadata(TypedDict):
@@ -102,8 +107,8 @@ def get_index_signatures(index_folder: str | Path) -> list[ToolMetadata]:
     index_folder = Path(index_folder)
 
     index_manifest = index_folder / TOOLS_CONFIG_FILENAME
-    with open(index_manifest) as file:
-        manifest = yaml.safe_load(file)
+    with open(index_manifest, "rb") as file:
+        manifest = tomllib.load(file)["index"]
 
     tools = []
     for tool_id in manifest.get("tools", []):
@@ -147,8 +152,8 @@ def get_index_tools(index_folder: str | Path) -> list[Callable]:
     index_folder = Path(index_folder)
 
     index_manifest = index_folder / TOOLS_CONFIG_FILENAME
-    with open(index_manifest) as file:
-        manifest = yaml.safe_load(file)
+    with open(index_manifest, "rb") as file:
+        manifest = tomllib.load(file)["index"]
 
     tools = []
     for tool_id in manifest.get("tools", []):

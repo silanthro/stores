@@ -21,8 +21,8 @@ from stores.index_utils import (
     wrap_tool,
 )
 from stores.parsing import llm_parse_json
-from stores.utils import ProviderFormat, get_type_info, get_types
 from stores.tools import REPLY
+from stores.utils import ProviderFormat, get_type_info, get_types
 
 logging.basicConfig()
 logger = logging.getLogger("stores.index")
@@ -125,12 +125,12 @@ class Index(BaseModel):
                         self._index_paths[index_name] = str(CACHE_DIR / index_name)
                     except Exception:
                         logger.warning(
-                            f'Unable to load index "{index_name}"\nIf this is a local index, make sure it can be found as a directory and contains a TOOLS.yml file.',
+                            f'Unable to load index "{index_name}"\nIf this is a local index, make sure it can be found as a directory and contains a tools.toml file.',
                             exc_info=True,
                         )
                 if loaded_index is None:
                     raise ValueError(
-                        f'Unable to load index "{index_name}"\nIf this is a local index, make sure it can be found as a directory and contains a TOOLS.yml file.'
+                        f'Unable to load index "{index_name}"\nIf this is a local index, make sure it can be found as a directory and contains a tools.toml file.'
                     )
                 else:
                     for t in loaded_index:

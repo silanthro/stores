@@ -1,6 +1,0 @@
-tools:
-- mock_index.get_package
-- mock_index.async_get_package
-- mock_index.typed_function
-- mock_index.enum_input
-- mock_index.typed_dict_input
