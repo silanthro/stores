@@ -257,6 +257,9 @@ def run_mp_process_helper(
             result = loop.run_until_complete(fn(**kwargs))
         else:
             result = fn(**kwargs)
+        if conn:
+            conn.send(result)
+            conn.close()
     except Exception as e:
         # Handle exception in parent
         logger.warning(e, exc_info=True)
@@ -264,9 +267,6 @@ def run_mp_process_helper(
         if conn:
             conn.send(error)
             conn.close()
-    if conn and not error:
-        conn.send(result)
-        conn.close()
     return result
 
 
