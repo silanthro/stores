@@ -21,8 +21,8 @@ from stores.index_utils import (
     wrap_tool,
 )
 from stores.parsing import llm_parse_json
-from stores.utils import ProviderFormat, get_type_info, get_types
 from stores.tools import REPLY
+from stores.utils import ProviderFormat, get_type_info, get_types
 
 logging.basicConfig()
 logger = logging.getLogger("stores.index")
