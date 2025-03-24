@@ -9,7 +9,7 @@ load_dotenv()
 
 
 def main():
-    request = "Send an email to x@gmail.com containing a poem"
+    request = "Email x@gmail.com a parenting poem"
 
     # Load custom tools
     index = stores.Index(

@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import logging
 import venv
+from collections import Counter
 from pathlib import Path
 from typing import Callable
 
@@ -21,6 +22,7 @@ from stores.index_utils import (
 )
 from stores.parsing import llm_parse_json
 from stores.tools import DEFAULT_TOOLS, REPLY
+from stores.utils import ProviderFormat, get_type_info, get_types
 
 logging.basicConfig()
 logger = logging.getLogger("stores.index")
@@ -147,6 +149,101 @@ class Index(BaseModel):
         self.tools.append(tool)
         self.tools_dict[tool.__name__] = tool
         self._tool_indexes[tool.__name__] = index
+
+    def format_tools(
+        self,
+        provider: ProviderFormat,
+    ):
+        """Format tools based on the provider's requirements."""
+        # Check for empty tools list first
+        if not self.tools:
+            raise ValueError("No tools provided to format")
+
+        formatted_tools = []
+
+        # Check for duplicate tool names
+        tool_name_counts = Counter([tool.__name__ for tool in self.tools])
+        duplicates = [name for name in tool_name_counts if tool_name_counts[name] > 1]
+        if duplicates:
+            raise ValueError(f"Duplicate tool name(s): {duplicates}")
+
+        for tool in self.tools:
+            # Extract parameters and their types from the tool's function signature
+            signature = inspect.signature(tool)
+            parameters = {}
+            required_params = []
+            for param_name, param in signature.parameters.items():
+                param_type = param.annotation
+                args, processed_type, nullable = get_type_info(
+                    param_type, param, provider
+                )
+
+                types = get_types(processed_type, nullable)
+
+                param_info = {
+                    "type": types[0] if len(types) == 1 else types,
+                    "description": "",
+                }
+                if provider == ProviderFormat.GOOGLE_GEMINI:
+                    param_info["nullable"] = nullable
+
+                if types[0] == "array":
+                    item_type = get_types(args[0] if args else "str", nullable)[0]
+                    param_info["items"] = {"type": item_type}
+
+                parameters[param_name] = param_info
+
+                required_params.append(param_name)
+
+            # Replace periods in function name with hyphens
+            # TODO: Move ./- replacement to tool wrapper
+            formatted_tool_name = tool.__name__.replace(".", "-")
+
+            # Create formatted tool structure based on provider
+            description = inspect.getdoc(tool) or "No description available."
+            base_params = {
+                "type": "object",
+                "properties": parameters,
+                "required": required_params,
+            }
+
+            # Format tool based on provider
+            if provider == ProviderFormat.OPENAI_CHAT:
+                formatted_tool = {
+                    "type": "function",
+                    "function": {
+                        "name": formatted_tool_name,
+                        "description": description,
+                        "parameters": {**base_params, "additionalProperties": False},
+                        "strict": True,
+                    },
+                }
+            elif provider == ProviderFormat.OPENAI_RESPONSES:
+                formatted_tool = {
+                    "type": "function",
+                    "name": formatted_tool_name,
+                    "description": description,
+                    "parameters": {**base_params, "additionalProperties": False},
+                }
+            elif provider == ProviderFormat.ANTHROPIC:
+                formatted_tool = {
+                    "name": formatted_tool_name,
+                    "description": description,
+                    "input_schema": base_params,
+                }
+            elif provider == ProviderFormat.GOOGLE_GEMINI:
+                formatted_tool = {
+                    "name": formatted_tool_name,
+                    "parameters": {
+                        "type": "object",
+                        "description": description,
+                        "properties": parameters,
+                        "required": required_params,
+                    },
+                }
+
+            formatted_tools.append(formatted_tool)
+        return formatted_tools
 
     def execute(self, toolname: str, kwargs: dict | None = None):
         if toolname == "REPLY":
