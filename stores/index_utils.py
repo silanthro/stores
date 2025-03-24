@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import importlib.metadata
 import importlib.util
 import inspect
 import json
@@ -53,12 +54,23 @@ class ToolMetadata(TypedDict):
 
 
 def get_param_type(param_type: type):
+    if get_origin(param_type) is list:
+        # List
+        return {
+            "type": "array",
+            "items": [get_param_type(a) for a in get_args(param_type)],
+        }
+    if get_origin(param_type) is Union:
+        # Union
+        return {
+            "type": "union",
+            "items": [get_param_type(a) for a in get_args(param_type)],
+        }
     if inspect.isclass(param_type) and issubclass(param_type, Enum):
         # Enum
-        # enum_values = list(map(lambda c: c.value, param_type))
         return {
-            "type_name": param_type.__name__,
             "type": "enum",
+            "type_name": param_type.__name__,
             "enum": {c.name: c.value for c in param_type},
         }
     if (
@@ -68,17 +80,27 @@ def get_param_type(param_type: type):
     ):
         # TypedDict
         return {
-            "type_name": param_type.__name__,
             "type": "object",
+            "type_name": param_type.__name__,
             "properties": {
-                # TODO: Recursively examine proptype
-                propname: proptype
+                propname: get_param_type(proptype)
                 for propname, proptype in param_type.__annotations__.items()
             },
         }
     return {
         "type": param_type,
     }
+
+
+def parse_param_type(param_dict: dict) -> type:
+    if param_dict["type"] == "array":
+        child_types = [parse_param_type(a) for a in param_dict["items"]]
+        return list[*child_types]
+    if param_dict["type"] == "enum":
+        return Enum(param_dict["type_name"], param_dict["enum"])
+    if param_dict["type"] == "object":
+        return TypedDict(param_dict["type_name"], param_dict["properties"])
+    return param_dict["type"]
 
 
 def get_param_signature(param: Parameter):
@@ -366,18 +388,12 @@ def wrap_remote_tool(
     params = []
     for param in tool_metadata["params"]:
         name = param["name"]
-        if param["type"] == "object":
-            argtype = TypedDict(param["type_name"], param["properties"])
-        elif param["type"] == "enum":
-            argtype = Enum(param["type_name"], param["enum"])
-        else:
-            argtype = param["type"]
         params.append(
             inspect.Parameter(
                 name=name,
                 kind=param["kind"],
                 default=param["default"],
-                annotation=argtype,
+                annotation=parse_param_type(param),
             )
         )
     # Reconstruct return type

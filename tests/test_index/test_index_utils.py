@@ -90,8 +90,12 @@ def test_get_index_signatures(local_index_folder):
                     "type_name": "Animal",
                     "type": "object",
                     "properties": {
-                        "name": str,
-                        "num_legs": int,
+                        "name": {
+                            "type": str,
+                        },
+                        "num_legs": {
+                            "type": int,
+                        },
                     },
                     "kind": Parameter.POSITIONAL_OR_KEYWORD,
                     "default": Parameter.empty,

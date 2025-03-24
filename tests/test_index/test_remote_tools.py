@@ -105,8 +105,8 @@ async def test_remote_tool(remote_index_folder):
                     "type": "object",
                     "type_name": "Animal",
                     "properties": {
-                        "name": str,
-                        "num_legs": int,
+                        "name": {"type": str},
+                        "num_legs": {"type": int},
                     },
                     "default": Parameter.empty,
                 },
@@ -117,8 +117,8 @@ async def test_remote_tool(remote_index_folder):
                 "type": "object",
                 "type_name": "Animal",
                 "properties": {
-                    "name": str,
-                    "num_legs": int,
+                    "name": {"type": str},
+                    "num_legs": {"type": int},
                 },
             },
         },
