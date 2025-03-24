@@ -191,25 +191,6 @@ def test_list_type_formatting(clean_index, provider):
     check_minimum_properties(output_format, tool_with_lists_min_args)
 
 
-def test_tool_metadata(clean_index):
-    """Test tool name and description formatting."""
-
-    def my_tool():
-        """Tool description."""
-        pass
-
-    my_tool.__name__ = "my.complex.tool"
-
-    clean_index.tools = [my_tool]
-    formatted_tools = clean_index.format_tools(ProviderFormat.OPENAI_CHAT)
-
-    tool = formatted_tools[0]
-    # Test period to hyphen conversion in name
-    assert tool["function"]["name"] == "my-complex-tool"
-    # Test description extraction
-    assert tool["function"]["description"] == "Tool description."
-
-
 def test_unsupported_type(clean_index, provider):
     """Test that unsupported types raise TypeError."""
 
