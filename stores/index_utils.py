@@ -203,6 +203,9 @@ def install_venv_deps(index_folder: str | Path, lib_paths: list[str] | None = No
         sysconfig.get_path("platlib"),
         sysconfig.get_path("purelib"),
     ]
+    for path in lib_paths:
+        if path not in sys.path:
+            sys.path.append(path)
     # Either `pip install .`
     # Or `pip install -r requirements.txt`
     index_folder = Path(index_folder)
@@ -213,19 +216,24 @@ def install_venv_deps(index_folder: str | Path, lib_paths: list[str] | None = No
     if any((index_folder / f).exists() for f in setup_files):
         # Check if module has already been installed
         for pkg in importlib.metadata.distributions():
-            if pkg.locate_file("").as_posix() in lib_paths and pkg.name != "pip":
+            if pkg.locate_file("").as_posix() in lib_paths and pkg.name not in [
+                "pip",
+                "setuptools",
+            ]:
                 # `pip install .` has already been run
-                # since there exists packages installed in this venv
-                return
+                # since there exists new packages installed in this venv
+                return "Already installed"
         subprocess.call(
             [f"{VENV_NAME}/bin/pip", "install", "."],
             cwd=index_folder,
         )
+        return "Installed with pip install ."
     elif (index_folder / "requirements.txt").exists():
         subprocess.call(
             [f"{VENV_NAME}/bin/pip", "install", "-r", "requirements.txt"],
             cwd=index_folder,
         )
+        return "Installed with pip install -r requirements.txt"
 
 
 def run_mp_process_helper(

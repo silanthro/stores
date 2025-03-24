@@ -26,6 +26,7 @@ from stores.utils import ProviderFormat, get_type_info, get_types
 
 logging.basicConfig()
 logger = logging.getLogger("stores.index")
+logger.setLevel(logging.INFO)
 
 
 def load_remote_index(
@@ -33,12 +34,20 @@ def load_remote_index(
 ):
     index_folder = CACHE_DIR / index_id
     if not index_folder.exists():
+        logger.info(f"Installing {index_id} index...")
         # Lookup Stores DB
-        index_metadata = lookup_index(index_id, commit_like)
-        if index_metadata:
-            repo_url = index_metadata["clone_url"]
-            commit_like = index_metadata["commit"]
-        else:
+        repo_url = None
+        try:
+            index_metadata = lookup_index(index_id, commit_like)
+            if index_metadata:
+                repo_url = index_metadata["clone_url"]
+                commit_like = index_metadata["commit"]
+        except Exception:
+            logger.warning(
+                f"Could not find {index_id} in stores, assuming index references a GitHub repo..."
+            )
+            pass
+        if not repo_url:
             # Otherwise, assume index references a GitHub repo
             repo_url = f"https://github.com/{index_id}.git"
         repo = Repo.clone_from(repo_url, index_folder)
@@ -47,7 +56,7 @@ def load_remote_index(
     # Create venv and install deps
     venv_folder = index_folder / VENV_NAME
     if not venv_folder.exists():
-        venv.create(venv_folder, symlinks=True, with_pip=True)
+        venv.create(venv_folder, symlinks=True, with_pip=True, upgrade_deps=True)
 
     run_mp_process(
         fn=install_venv_deps,
