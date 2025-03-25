@@ -5,9 +5,12 @@ This example shows how to use stores with OpenAI's Responses API.
 import json
 import os
 
+import dotenv
 from openai import OpenAI
 
 import stores
+
+dotenv.load_dotenv()
 
 
 def main():

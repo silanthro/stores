@@ -5,8 +5,11 @@ This example shows how to use stores with Anthropic's API.
 import os
 
 import anthropic
+import dotenv
 
 import stores
+
+dotenv.load_dotenv()
 
 
 def main():

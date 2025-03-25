@@ -4,10 +4,13 @@ This example shows how to use stores with Google's Gemini API with automatic too
 
 import os
 
+import dotenv
 from google import genai
 from google.genai import types
 
 import stores
+
+dotenv.load_dotenv()
 
 
 def main():

@@ -4,11 +4,14 @@ This example shows how to use stores with LangChain and a LangGraph agent.
 
 import os
 
+import dotenv
 from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
 
 import stores
+
+dotenv.load_dotenv()
 
 
 def main():

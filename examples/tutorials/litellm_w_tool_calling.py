@@ -5,9 +5,12 @@ This example shows how to use stores with LiteLLM with native function calls.
 import json
 import os
 
+import dotenv
 from litellm import completion
 
 import stores
+
+dotenv.load_dotenv()
 
 
 def main():

@@ -4,11 +4,14 @@ This example shows how to use stores with a LlamaIndex agent.
 
 import os
 
+import dotenv
 from llama_index.core.agent import AgentRunner
 from llama_index.core.tools import FunctionTool
 from llama_index.llms.google_genai import GoogleGenAI
 
 import stores
+
+dotenv.load_dotenv()
 
 
 def main():
