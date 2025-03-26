@@ -1,18 +1,16 @@
 import asyncio
 import functools
+import hashlib
 import importlib.metadata
 import importlib.util
 import inspect
 import json
 import logging
-import multiprocessing
 import os
 import subprocess
 import sys
-import sysconfig
 from enum import Enum
 from inspect import Parameter
-from multiprocessing.connection import Connection
 from pathlib import Path
 from types import NoneType
 from typing import (
@@ -28,6 +26,8 @@ from typing import (
 
 import requests
 from makefun import create_function
+
+from stores.context import new_env_context
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -210,121 +210,48 @@ def get_index_tools(index_folder: str | Path) -> list[Callable]:
     return tools
 
 
-def install_venv_deps(index_folder: str | Path, lib_paths: list[str] | None = None):
-    lib_paths = lib_paths or [
-        sysconfig.get_path("platlib"),
-        sysconfig.get_path("purelib"),
-    ]
-    for path in lib_paths:
-        if path not in sys.path:
-            sys.path.append(path)
-    # Either `pip install .`
-    # Or `pip install -r requirements.txt`
+def install_venv_deps(index_folder: os.PathLike):
     index_folder = Path(index_folder)
-    setup_files = [
-        "setup.py",
-        "pyproject.toml",
-    ]
-    if any((index_folder / f).exists() for f in setup_files):
-        # Check if module has already been installed
-        for pkg in importlib.metadata.distributions():
-            if pkg.locate_file("").as_posix() in lib_paths and pkg.name not in [
-                "pip",
-                "setuptools",
-            ]:
-                # `pip install .` has already been run
-                # since there exists new packages installed in this venv
-                return "Already installed"
-        subprocess.call(
-            [f"{VENV_NAME}/bin/pip", "install", "."],
-            cwd=index_folder,
-        )
-        return "Installed with pip install ."
-    elif (index_folder / "requirements.txt").exists():
-        subprocess.call(
-            [f"{VENV_NAME}/bin/pip", "install", "-r", "requirements.txt"],
-            cwd=index_folder,
-        )
-        return "Installed with pip install -r requirements.txt"
 
+    supported_deps_configs = {
+        "pyproject.toml": f"{VENV_NAME}/bin/pip install .",
+        "setup.py": f"{VENV_NAME}/bin/pip install .",
+        "requirements.txt": f"{VENV_NAME}/bin/pip install -r requirements.txt",
+    }
+    hash_file = ".deps_hash"
 
-def run_mp_process_helper(
-    fn: Callable,
-    kwargs: dict | None = None,
-    env_vars: dict | None = None,
-    conn: Connection | None = None,
-):
-    error = None
-    result = None
-    try:
-        # Add venv packages to sys.path
-        # https://www.rossgray.co.uk/posts/python-multiprocessing-using-a-different-python-executable/
-        lib_paths = [
-            sysconfig.get_path("platlib"),
-            sysconfig.get_path("purelib"),
-        ]
-        for path in lib_paths:
-            if path not in sys.path:
-                sys.path.append(path)
-
-        os.environ.clear()
-        os.environ.update(env_vars or {})
-
-        kwargs = kwargs or {}
-        if inspect.iscoroutinefunction(fn):
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            result = loop.run_until_complete(fn(**kwargs))
+    def has_installed(config_path: os.PathLike):
+        """
+        Use a hash file to check if dependencies have been installed
+        """
+        with open(config_path, "rb") as f:
+            config_hash = hashlib.sha256(f.read()).hexdigest()
+        hash_path = config_path.parent / hash_file
+        if hash_path.exists():
+            with open(hash_path) as f:
+                return config_hash == f.read().strip()
         else:
-            result = fn(**kwargs)
-        if conn:
-            conn.send(result)
-            conn.close()
-    except Exception as e:
-        # Handle exception in parent
-        logger.warning(e, exc_info=True)
-        error = e
-        if conn:
-            conn.send(error)
-            conn.close()
-    return result
+            return False
 
+    def write_hash(config_path: os.PathLike):
+        with open(config_path, "rb") as f:
+            config_hash = hashlib.sha256(f.read()).hexdigest()
+        hash_path = config_path.parent / hash_file
+        with open(hash_path, "w") as f:
+            f.write(config_hash)
 
-def run_mp_process(
-    fn: Callable,
-    kwargs: dict | None = None,
-    env_vars: dict | None = None,
-    venv_folder: str | Path | None = None,
-):
-    start_method = None
-    if venv_folder:
-        venv_folder = Path(venv_folder)
-        # Set appropriate executable
-        start_method = multiprocessing.get_start_method()
-        multiprocessing.set_start_method("spawn", force=True)
-        multiprocessing.set_executable(venv_folder / "bin/python")
-
-    parent_conn, child_conn = multiprocessing.Pipe()
-    p = multiprocessing.Process(
-        target=run_mp_process_helper,
-        kwargs={
-            "fn": fn,
-            "kwargs": kwargs,
-            "env_vars": env_vars,
-            "conn": child_conn,
-        },
-    )
-    p.start()
-    p.join()
-    output = parent_conn.recv()
-    if venv_folder:
-        # Reset executable
-        if start_method:
-            multiprocessing.set_start_method(start_method, force=True)
-        multiprocessing.set_executable(sys.executable)
-    if isinstance(output, Exception):
-        raise output
-    return output
+    for config_file, install_cmd in supported_deps_configs.items():
+        config_path = index_folder / config_file
+        if config_path.exists():
+            # Check if already installed
+            if has_installed(config_path):
+                return "Already installed"
+            subprocess.check_call(
+                install_cmd.split(),
+                cwd=index_folder,
+            )
+            write_hash(config_path)
+            return logger.info(f"Installed with {index_folder}/{install_cmd}")
 
 
 def run_remote_tool(
@@ -377,32 +304,32 @@ def wrap_remote_tool(
     # TODO: Handle misc issues
     # - . in function name
     def func_handler(*args, **kwargs):
-        # Run tool with run_mp_process
-        return run_mp_process(
-            fn=run_remote_tool,
-            kwargs={
-                "tool_id": tool_metadata["name"],
-                "index_folder": index_folder,
-                "args": args,
-                "kwargs": kwargs,
-            },
+        # Run tool with new_env_context
+        with new_env_context(
+            Path(index_folder) / VENV_NAME,
             env_vars=env_vars,
-            venv_folder=venv_folder,
-        )
+        ):
+            result = run_remote_tool(
+                tool_metadata["name"],
+                index_folder,
+                args,
+                kwargs,
+            )
+        return result
 
     async def async_func_handler(*args, **kwargs):
-        # Run tool with run_mp_process
-        return run_mp_process(
-            fn=run_remote_tool,
-            kwargs={
-                "tool_id": tool_metadata["name"],
-                "index_folder": index_folder,
-                "args": args,
-                "kwargs": kwargs,
-            },
+        # Run tool with new_env_context
+        with new_env_context(
+            Path(index_folder) / VENV_NAME,
             env_vars=env_vars,
-            venv_folder=venv_folder,
-        )
+        ):
+            result = run_remote_tool(
+                tool_metadata["name"],
+                index_folder,
+                args,
+                kwargs,
+            )
+        return result
 
     # Reconstruct signature from list of args
     params = []

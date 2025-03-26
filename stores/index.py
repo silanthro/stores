@@ -9,6 +9,7 @@ from typing import Callable
 from git import Repo
 from pydantic import BaseModel
 
+from stores.context import new_env_context
 from stores.index_utils import (
     CACHE_DIR,
     VENV_NAME,
@@ -16,7 +17,6 @@ from stores.index_utils import (
     get_index_tools,
     install_venv_deps,
     lookup_index,
-    run_mp_process,
     wrap_remote_tool,
     wrap_tool,
 )
@@ -58,18 +58,13 @@ def load_remote_index(
     if not venv_folder.exists():
         venv.create(venv_folder, symlinks=True, with_pip=True, upgrade_deps=True)
 
-    run_mp_process(
-        fn=install_venv_deps,
-        kwargs={"index_folder": index_folder},
-        venv_folder=venv_folder,
-    )
+    with new_env_context(
+        venv_folder,
+        env_vars=env_vars,
+    ):
+        install_venv_deps(index_folder)
+        index_signatures = get_index_signatures(index_folder)
 
-    tools = []
-    index_signatures = run_mp_process(
-        fn=get_index_signatures,
-        kwargs={"index_folder": index_folder},
-        venv_folder=venv_folder,
-    )
     tools = [
         wrap_remote_tool(
             s,
