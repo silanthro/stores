@@ -135,13 +135,13 @@ async def test_remote_tool(remote_index_folder):
 
     # Tools should run successfully
     for tool in tools:
-        if tool.__name__ == "mock_index-typed_function":
+        if tool.__name__ == "mock_index.typed_function":
             kwargs = {"bar": "red"}
             output = kwargs["bar"]
-        elif tool.__name__ == "mock_index-enum_input":
+        elif tool.__name__ == "mock_index.enum_input":
             kwargs = {"bar": "red"}
             output = kwargs["bar"]
-        elif tool.__name__ == "mock_index-typed_dict_input":
+        elif tool.__name__ == "mock_index.typed_dict_input":
             kwargs = {"bar": {"name": "Tiger", "num_legs": 4}}
             output = kwargs["bar"]
         else:

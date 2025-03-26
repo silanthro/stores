@@ -216,7 +216,8 @@ class Index(BaseModel):
                 formatted_tool = {
                     "type": "function",
                     "function": {
-                        "name": tool.__name__,
+                        # OpenAI only supports ^[a-zA-Z0-9_-]{1,64}$
+                        "name": tool.__name__.replace(".", "-"),
                         "description": description,
                         "parameters": {**base_params, "additionalProperties": False},
                         "strict": True,
@@ -225,7 +226,8 @@ class Index(BaseModel):
             elif provider == ProviderFormat.OPENAI_RESPONSES:
                 formatted_tool = {
                     "type": "function",
-                    "name": tool.__name__,
+                    # OpenAI only supports ^[a-zA-Z0-9_-]{1,64}$
+                    "name": tool.__name__.replace(".", "-"),
                     "description": description,
                     "parameters": {**base_params, "additionalProperties": False},
                 }

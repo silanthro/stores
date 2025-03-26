@@ -439,7 +439,6 @@ def wrap_tool(tool: Callable | Awaitable):
     - Gemini does not accept non-None default values
     If there are any default args, we set default value to None
     and inject the correct default value at runtime.
-    - OpenAI does not accept "." in tool names, we substitute this with "-"
     """
     # Retrieve default arguments
     sig = inspect.signature(tool)
@@ -509,7 +508,6 @@ def wrap_tool(tool: Callable | Awaitable):
             return tool(*args, **kwargs)
 
     functools.update_wrapper(wrapper, tool)
-    wrapper.__name__ = wrapper.__name__.replace(".", "-")
     wrapper.__signature__ = new_sig
 
     return wrapper
