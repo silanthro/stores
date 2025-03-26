@@ -448,16 +448,21 @@ def wrap_tool(tool: Callable | Awaitable):
     for argname, arg in sig.parameters.items():
         argtype = arg.annotation
         if arg.default is Parameter.empty:
-            # Check if it's annotated with Optional or Union[None, X]
-            # TODO: We might want to remove the Optional tag instead since no
-            # default value is supplied
+            # If it's annotated with Optional or Union[None, X]
+            # remove the Optional tag since no default value is supplied
             if get_origin(argtype) == Union and NoneType in get_args(argtype):
-                default_args[argname] = None
+                argtype_args = [a for a in get_args(argtype) if a != NoneType]
+                if len(argtype_args) == 0:
+                    raise TypeError(
+                        f"Parameter {argname} of tool {tool.__name__} has an invalid type of {argtype}"
+                    )
+                new_annotation = argtype_args[0]
+                for arg in argtype_args[1:]:
+                    new_annotation = new_annotation | arg
                 new_args.append(
                     arg.replace(
-                        default=None,
                         kind=Parameter.POSITIONAL_OR_KEYWORD,
-                        annotation=argtype,
+                        annotation=new_annotation,
                     )
                 )
             else:
