@@ -426,6 +426,7 @@ def wrap_remote_tool(
     func = create_function(
         signature,
         async_func_handler if tool_metadata.get("is_async") else func_handler,
+        qualname=tool_metadata["name"],
         doc=tool_metadata.get("doc"),
     )
     func.__name__ = tool_metadata["name"]
