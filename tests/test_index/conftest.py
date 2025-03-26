@@ -137,16 +137,6 @@ def foo_w_default_notype(bar="test"):
     return bar
 
 
-def foo_w_optional(bar: Optional[str]):
-    """
-    Documentation of foo_w_optional
-    Args:
-        bar (Optional[str]): Sample text
-    """
-    bar = bar or "test"
-    return bar
-
-
 def foo_w_optional_and_default(bar: Optional[str] = "test"):
     """
     Documentation of foo_w_optional
@@ -167,16 +157,39 @@ def foo_w_optional_and_default(bar: Optional[str] = "test"):
             "signature": "(bar: Optional[str] = None)",
         },
         {
-            "function": foo_w_optional,
-            "signature": "(bar: Optional[str] = None)",
-        },
-        {
             "function": foo_w_optional_and_default,
             "signature": "(bar: Optional[str] = None)",
         },
     ],
 )
 def sample_tool_w_defaults(request):
+    function_metadata = {
+        **request.param,
+        "name": request.param["function"].__name__,
+        "doc": inspect.getdoc(request.param["function"]),
+    }
+    yield function_metadata
+
+
+def foo_w_optional_no_default(bar: Optional[str]):
+    """
+    Documentation of foo_w_optional
+    Args:
+        bar (Optional[str]): Sample text
+    """
+    bar = bar or "test"
+    return bar
+
+
+@pytest.fixture(
+    params=[
+        {
+            "function": foo_w_optional_no_default,
+            "signature": "(bar: str)",
+        },
+    ],
+)
+def sample_tool_optional_no_default(request):
     function_metadata = {
         **request.param,
         "name": request.param["function"].__name__,

@@ -2,6 +2,8 @@ import inspect
 import logging
 from inspect import Parameter
 
+import pytest
+
 import stores.index_utils as utils
 
 logging.basicConfig()
@@ -95,6 +97,29 @@ async def test_wrap_tool_w_defaults(sample_tool_w_defaults):
         except TypeError:
             original_result = tool_fn("test")
         assert wrapped_tool() == original_result
+
+
+# If tool has Optional parameter without default, it should remove the Optional
+async def test_wrap_tool_option_no_default(sample_tool_optional_no_default):
+    tool_fn = sample_tool_optional_no_default["function"]
+    wrapped_tool = utils.wrap_tool(tool_fn)
+    assert (
+        str(inspect.signature(wrapped_tool))
+        == sample_tool_optional_no_default["signature"]
+    )
+    assert wrapped_tool.__name__ == sample_tool_optional_no_default["name"]
+    assert inspect.getdoc(wrapped_tool) == sample_tool_optional_no_default["doc"]
+    # Check that error is raised when wrapped_tool is run without arguments
+    with pytest.raises(TypeError):
+        if inspect.iscoroutinefunction(tool_fn):
+            await wrapped_tool()
+        else:
+            wrapped_tool()
+    # Check that tool runs
+    if inspect.iscoroutinefunction(tool_fn):
+        assert await wrapped_tool("test") == await tool_fn("test")
+    else:
+        assert wrapped_tool("test") == tool_fn("test")
 
 
 # Test complex args
