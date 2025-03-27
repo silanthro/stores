@@ -1,7 +1,16 @@
 import inspect
 from typing import Callable
 
-from stores.prompts.tool_template import TOOL_TEMPLATE
+TOOL_TEMPLATE = """
+Tool:
+{name}
+Description:
+{description}
+Input Schema:
+{input_schema}
+Output Schema:
+{output_schema}
+"""
 
 
 def get_tool_description(tool: Callable):

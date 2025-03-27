@@ -1,6 +1,6 @@
 from stores.indexes import Index
 from stores.parsing import llm_parse_json
-from stores.prompts.format import format_query
+from stores.prompts.query import format_query
 
 __all__ = [
     "Index",
