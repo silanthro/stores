@@ -1,6 +1,7 @@
 import asyncio
 import functools
 import inspect
+import logging
 from inspect import Parameter
 from types import NoneType
 from typing import Callable, Optional, Union, get_args, get_origin
@@ -8,6 +9,10 @@ from typing import Callable, Optional, Union, get_args, get_origin
 from stores.format import ProviderFormat, format_tools
 from stores.parse import llm_parse_json
 from stores.utils import check_duplicates
+
+logging.basicConfig()
+logger = logging.getLogger("stores.indexes.local_index")
+logger.setLevel(logging.INFO)
 
 
 def wrap_tool(tool: Callable):
