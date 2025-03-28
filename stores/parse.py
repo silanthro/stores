@@ -9,7 +9,7 @@ from dirtyjson.attributed_containers import AttributedDict, AttributedList
 from fuzzywuzzy import process
 
 logging.basicConfig()
-logger = logging.getLogger("otaro.parsing")
+logger = logging.getLogger("stores.parse")
 logger.setLevel(logging.INFO)
 
 
@@ -100,7 +100,6 @@ def llm_parse_json(text: str, keys: list[str] = None, autoescape=True):
 def escape_quotes(json_str: str, keys: list[str] = None):
     keys = keys or []
     quote_pos = [i for i, c in enumerate(json_str) if c in "\"'"]
-    # quit()
     # At minimum there should be 2*len(keys) quotes, any quotes
     # more than this is a candidate for escape
     # In addition, as long as there is an escaped quote, we need
