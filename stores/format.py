@@ -1,4 +1,5 @@
 import inspect
+import logging
 import types as T
 from enum import Enum
 from typing import (
@@ -11,6 +12,10 @@ from typing import (
 )
 
 from stores.utils import check_duplicates
+
+logging.basicConfig()
+logger = logging.getLogger("stores.format")
+logger.setLevel(logging.INFO)
 
 
 class ProviderFormat(str, Enum):
