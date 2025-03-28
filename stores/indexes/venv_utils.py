@@ -74,7 +74,9 @@ def install_venv_deps(index_folder: os.PathLike):
                 cwd=index_folder,
             )
             write_hash(config_path)
-            return logger.info(f"Installed with {index_folder}/{install_cmd}")
+            message = f"Installed with {index_folder}/{install_cmd}"
+            logger.info(message)
+            return message
 
 
 def init_venv_tools(index_folder: os.PathLike, env_var: dict | None = None):
