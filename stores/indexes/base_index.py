@@ -18,10 +18,9 @@ def wrap_tool(tool: Callable):
     and inject the correct default value at runtime.
     """
     # Retrieve default arguments
-    sig = inspect.signature(tool)
+    original_signature = inspect.signature(tool)
     new_args = []
-    default_args = {}
-    for argname, arg in sig.parameters.items():
+    for argname, arg in original_signature.parameters.items():
         argtype = arg.annotation
         if arg.default is Parameter.empty:
             # If it's annotated with Optional or Union[None, X]
@@ -44,10 +43,7 @@ def wrap_tool(tool: Callable):
             else:
                 new_args.append(arg)
         else:
-            # Process args with default values
-            # - Store default value
-            # - Change type to include None
-            default_args[argname] = arg.default
+            # Process args with default values: make sure type includes None
             new_annotation = argtype
             if new_annotation is Parameter.empty:
                 new_annotation = Optional[type(arg.default)]
@@ -62,27 +58,22 @@ def wrap_tool(tool: Callable):
                     annotation=new_annotation,
                 )
             )
-    new_sig = sig.replace(parameters=new_args)
+    new_sig = original_signature.replace(parameters=new_args)
 
     if inspect.iscoroutinefunction(tool):
 
         async def wrapper(*args, **kwargs):
             # Inject default values within wrapper
-            for kw, kwarg in kwargs.items():
-                if kwarg is None:
-                    kwargs[kw] = default_args.get(kw)
-            return await tool(*args, **kwargs)
+            bound_args = original_signature.bind(*args, **kwargs)
+            bound_args.apply_defaults()
+            return await tool(*bound_args.args, **bound_args.kwargs)
     else:
 
         def wrapper(*args, **kwargs):
             # Inject default values within wrapper
-            for kw, kwarg in kwargs.items():
-                if kwarg is None:
-                    kwargs[kw] = default_args.get(kw)
-            for default_kw, default_kwarg in default_args.items():
-                if default_kw not in kwargs:
-                    kwargs[default_kw] = default_kwarg
-            return tool(*args, **kwargs)
+            bound_args = original_signature.bind(*args, **kwargs)
+            bound_args.apply_defaults()
+            return tool(*bound_args.args, **bound_args.kwargs)
 
     functools.update_wrapper(wrapper, tool)
     wrapper.__signature__ = new_sig
