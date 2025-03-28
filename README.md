@@ -8,7 +8,7 @@ Usage:
 import stores
 from litellm import completion
 
-request = "Send an email to x@gmail.com containing a poem"
+request = "Send an email to email@example.com containing a poem"
 
 index = stores.Index(
     ["./custom_tools"],
