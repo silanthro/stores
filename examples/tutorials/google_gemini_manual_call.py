@@ -44,7 +44,5 @@ response = client.models.generate_content(
 
 # Execute the tool call
 tool_call = response.candidates[0].content.parts[0].function_call
-fn_name = tool_call.name
-fn_args = tool_call.args
-result = index.execute(fn_name, fn_args)
+result = index.execute(tool_call.name, tool_call.args)
 print(f"Tool output: {result}")

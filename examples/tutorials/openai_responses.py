@@ -38,7 +38,8 @@ response = client.responses.create(
 
 # Execute the tool call
 tool_call = response.output[0]
-fn_name = tool_call.name
-fn_args = json.loads(tool_call.arguments)
-result = index.execute(fn_name, fn_args)
+result = index.execute(
+    tool_call.name,
+    json.loads(tool_call.arguments),
+)
 print(f"Tool output: {result}")

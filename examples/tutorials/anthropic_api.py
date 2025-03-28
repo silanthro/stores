@@ -35,10 +35,9 @@ response = client.messages.create(
     ],
     tools=index.format_tools("anthropic"),
 )
+print(response.content)
 
 # Execute the tool call
 tool_call = response.content[-1]
-fn_name = tool_call.name
-fn_args = tool_call.input
-result = index.execute(fn_name, fn_args)
+result = index.execute(tool_call.name, tool_call.input)
 print(f"Tool output: {result}")

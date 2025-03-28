@@ -38,7 +38,8 @@ response = completion(
 
 # Execute the tool call
 tool_call = response.choices[0].message.tool_calls[0]
-fn_name = tool_call.function.name
-fn_args = json.loads(tool_call.function.arguments)
-result = index.execute(fn_name, fn_args)
+result = index.execute(
+    tool_call.function.name,
+    json.loads(tool_call.function.arguments),
+)
 print(f"Tool output: {result}")

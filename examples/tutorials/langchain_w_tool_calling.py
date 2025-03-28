@@ -34,7 +34,5 @@ response = model_with_tools.invoke(
 
 # Execute the tool call
 tool_call = response.tool_calls[0]
-fn_name = tool_call["name"]
-fn_args = tool_call["args"]
-result = index.execute(fn_name, fn_args)
+result = index.execute(tool_call["name"], tool_call["args"])
 print(f"Tool output: {result}")
