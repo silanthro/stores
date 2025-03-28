@@ -80,6 +80,7 @@ def install_venv_deps(index_folder: os.PathLike):
 
 
 def init_venv_tools(index_folder: os.PathLike, env_var: dict | None = None):
+    index_folder = Path(index_folder)
     env_var = env_var or {}
 
     index_manifest = index_folder / TOOLS_CONFIG_FILENAME
