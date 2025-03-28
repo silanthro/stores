@@ -2,6 +2,7 @@ import asyncio
 import functools
 import inspect
 import logging
+import re
 from inspect import Parameter
 from types import NoneType
 from typing import Callable, Optional, Union, get_args, get_origin
@@ -94,9 +95,13 @@ class BaseIndex:
     def execute(self, toolname: str, kwargs: dict | None = None):
         kwargs = kwargs or {}
 
+        # Use regex since we need to match cases where we perform
+        # substitutions such as replace(".", "-")
+        pattern = re.compile(":?" + re.sub("-|\.", "(-|\.)", toolname) + "$")
+
         matching_tools = []
         for key in self.tools_dict.keys():
-            if key == toolname or key.endswith(f":{toolname}"):
+            if pattern.match(key):
                 matching_tools.append(key)
         if len(matching_tools) == 0:
             raise ValueError(f"No tool matching '{toolname}'")
