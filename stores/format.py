@@ -1,4 +1,5 @@
 import inspect
+import types as T
 from enum import Enum
 from typing import (
     Callable,
@@ -27,7 +28,7 @@ def get_type_info(param_type, param: inspect.Parameter, provider: ProviderFormat
     nullable = param.default is not inspect.Parameter.empty
 
     # Handle Union types
-    if origin is Union:
+    if origin is Union or origin == T.UnionType:
         # Check if None is one of the types (Optional)
         nullable = nullable or type(None) in args
         # Filter out None types
@@ -60,14 +61,14 @@ def get_types(param: Type | GenericAlias, nullable: bool = False) -> list[str]:
     args = get_args(param)
 
     # If the parameter is a Union (like Union[int, str] or Optional[int])
-    if origin is Union:
+    if origin is Union or origin == T.UnionType:
         types = []
         has_none = False
-        for t in args:
-            if t is type(None):
+        for argtype in args:
+            if argtype is type(None):
                 has_none = True
                 continue
-            types.extend(get_types(t))
+            types.extend(get_types(argtype))
         if has_none or nullable:
             types.append("null")
         return types
