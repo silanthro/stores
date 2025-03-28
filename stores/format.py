@@ -74,20 +74,14 @@ def get_types(param: Type | GenericAlias, nullable: bool = False) -> list[str]:
         return types
 
     # If the param is a simple type (not Union, not Optional)
-    try:
-        type_name = param.__name__.lower()
-        if type_name not in type_mappings:
-            raise TypeError(f"Unsupported type: {param.__name__}")
-        types = [type_mappings[type_name]]
-        # Handle simple type with a default value
-        if nullable:
-            types.append("null")
-        return types
-    except (AttributeError, KeyError):
-        types = ["string"]
-        if nullable:
-            types.append("null")
-        return types
+    type_name = param.__name__.lower()
+    if type_name not in type_mappings:
+        raise TypeError(f"Unsupported type: {param.__name__}")
+    types = [type_mappings[type_name]]
+    # Handle simple type with a default value
+    if nullable:
+        types.append("null")
+    return types
 
 
 def format_tools(
