@@ -209,7 +209,7 @@ def parse_param_type(param_info: dict):
     if not isinstance(param_type, str):
         return param_type
     if param_type == "Literal":
-        return Literal.__getitem__(tuple(param_info["args"]))
+        return Literal.__getitem__(tuple(param_info["values"]))
     elif param_type == "Enum":
         return Enum(param_info["type_name"], param_info["values"])
     elif param_type == "TypedDict":
@@ -220,14 +220,17 @@ def parse_param_type(param_info: dict):
     elif param_type == "List":
         return list[parse_param_type(param_info["item_type"])]
     elif param_type == "Dict":
-        return Dict[parse_param_type(param_info["key_type"], param_info["value_type"])]
+        return Dict[
+            parse_param_type(param_info["key_type"]),
+            parse_param_type(param_info["value_type"]),
+        ]
     elif param_type == "Tuple":
         return Tuple.__getitem__(
-            tuple(*[parse_param_type(i) for i in param_info["item_types"]])
+            tuple([parse_param_type(i) for i in param_info["item_types"]])
         )
     elif param_type == "Union":
         return Union.__getitem__(
-            tuple(*[parse_param_type(i) for i in param_info["options"]])
+            tuple([parse_param_type(i) for i in param_info["options"]])
         )
     else:
         raise TypeError(f"Invalid param type {param_type} in param info {param_info}")
