@@ -44,6 +44,7 @@ class RemoteIndex(BaseIndex):
         self.index_folder = CACHE_DIR / self.index_id
         self.env_var = env_var or {}
         if not self.index_folder.exists():
+            commit_like = None
             if ":" in index_id:
                 index_id, commit_like = index_id.split(":")
             # Lookup Stores DB
