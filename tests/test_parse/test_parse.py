@@ -1,6 +1,12 @@
+import logging
+
 import pytest
 
-from stores.parsing import llm_parse_json
+from stores.parse import llm_parse_json
+
+logging.basicConfig()
+logger = logging.getLogger("stores.test_parse.test_parse")
+logger.setLevel(logging.INFO)
 
 
 def test_llm_parse_json(str_object):
@@ -28,7 +34,5 @@ def test_llm_parse_json_invalid():
 
 
 def test_llm_parse_json_dirty_strings(dirty_string):
-    assert (
-        llm_parse_json(dirty_string["string"], keys=dirty_string["keys"])
-        == dirty_string["object"]
-    )
+    output = llm_parse_json(dirty_string["string"], keys=dirty_string["keys"])
+    assert output == dirty_string["object"]

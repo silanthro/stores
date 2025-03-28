@@ -1,24 +1,25 @@
 import inspect
 import logging
+import os
 import shutil
 import venv
 from enum import Enum
 from inspect import Parameter
 from pathlib import Path
-from typing import Optional, TypedDict
+from typing import Optional, TypedDict, Union
 
 import pytest
 
-from stores import Index
-from stores.index import ProviderFormat
+from stores.constants import VENV_NAME
+from stores.format import ProviderFormat
+from stores.indexes.venv_utils import HASH_FILE
 
 logging.basicConfig()
-logger = logging.getLogger("stores.test_index.conftest")
+logger = logging.getLogger("stores.test_indexes.conftest")
 logger.setLevel(logging.INFO)
 
 TEST_REPO_ID = "greentfrapp/tools-graph"
 TEST_REPO_URL = f"http://github.com/{TEST_REPO_ID}.git"
-VENV_NAME = ".venv"
 
 
 @pytest.fixture()
@@ -31,35 +32,41 @@ def local_tools(request):
     yield request.params
 
 
-# @pytest.fixture(scope="session")
-# def remote_index_folder(tmpdir_factory: pytest.TempdirFactory):
-#     index_folder = tmpdir_factory.mktemp("tmp") / TEST_REPO_ID
-#     Repo.clone_from(TEST_REPO_URL, index_folder)
-#     # Create venv and install deps
-#     venv_folder = index_folder / VENV_NAME
-#     venv.create(venv_folder, symlinks=True, with_pip=True)
-#     subprocess.call(
-#         [f"{VENV_NAME}/bin/pip", "install", "."],
-#         cwd=index_folder,
-#     )
-#     return index_folder
+config_files = [
+    "pyproject.toml",
+    "requirements.txt",
+]
 
 
 @pytest.fixture(
-    scope="session",
-    params=[
-        "./tests/mock_index_w_deps_pyproject",
-        "./tests/mock_index_w_deps_req",
-    ],
+    scope="function",
+    params=config_files,
 )
 def remote_index_folder(request):
-    index_folder = Path(request.param)
+    index_folder = Path("./tests/mock_index_w_deps")
+
+    moved_files = []
+    for file in config_files:
+        if file != request.param:
+            src = index_folder / file
+            dst = index_folder / f".{file}"
+            shutil.move(src, dst)
+            moved_files.append([src, dst])
+
     # Create venv
-    venv_folder = index_folder / VENV_NAME
-    venv.create(venv_folder, symlinks=True, with_pip=True)
+    # venv_folder = index_folder / VENV_NAME
+    # venv.create(venv_folder, symlinks=True, with_pip=True)
     yield index_folder
     # Clean up venv folder after tests
-    shutil.rmtree(venv_folder)
+    shutil.rmtree(index_folder / VENV_NAME, ignore_errors=True)
+    try:
+        os.remove(index_folder / HASH_FILE)
+    except FileNotFoundError:
+        pass
+
+    # Reinstate moved_files
+    for src, dst in moved_files:
+        shutil.move(dst, src)
 
 
 def foo(bar: str):
@@ -74,6 +81,24 @@ def foo(bar: str):
 async def async_foo(bar: str):
     """
     Documentation of async_foo
+    Args:
+        bar (str): Sample text
+    """
+    return bar
+
+
+async def union_tool(bar: Union[str, int]):
+    """
+    Documentation of union_tool
+    Args:
+        bar (str): Sample text
+    """
+    return bar
+
+
+async def union_tool_w_none(bar: Union[None, str, int]):
+    """
+    Documentation of union_tool_w_none
     Args:
         bar (str): Sample text
     """
@@ -108,15 +133,36 @@ async def async_foo(bar: str):
             ],
             "return_type": Parameter.empty,
         },
+        {
+            "function": union_tool,
+            "signature": "(bar: Union[str, int])",
+            "params": [
+                {
+                    "name": "bar",
+                    "type": str | int | None,
+                    "kind": Parameter.POSITIONAL_OR_KEYWORD,
+                    "default": Parameter.empty,
+                }
+            ],
+            "return_type": Parameter.empty,
+        },
+        {
+            "function": union_tool_w_none,
+            "signature": "(bar: str | int)",
+            "params": [
+                {
+                    "name": "bar",
+                    "type": str | int | None,
+                    "kind": Parameter.POSITIONAL_OR_KEYWORD,
+                    "default": Parameter.empty,
+                }
+            ],
+            "return_type": Parameter.empty,
+        },
     ],
 )
 def sample_tool(request):
-    function_metadata = {
-        **request.param,
-        "name": request.param["function"].__name__,
-        "doc": inspect.getdoc(request.param["function"]),
-    }
-    yield function_metadata
+    yield request.param
 
 
 def foo_w_default(bar: str = "test"):
@@ -264,15 +310,42 @@ def buggy_tool(request):
         "tests",  # Folder exists but not an index
     ]
 )
-def buggy_index(request):
+def buggy_index_folder(request):
     yield request.param
 
 
-@pytest.fixture
-def clean_index():
-    """Create a clean Index instance without default tools."""
-    index = Index(tools=[])
-    return index
+@pytest.fixture(
+    params=[
+        "./tests/mock_index_custom_class",
+    ]
+)
+def index_folder_custom_class(request):
+    # Create venv
+    index_folder = Path(request.param)
+    venv_folder = index_folder / VENV_NAME
+    venv.create(venv_folder, symlinks=True, with_pip=True)
+    yield index_folder
+    # Clean up venv folder after tests
+    shutil.rmtree(venv_folder)
+    try:
+        os.remove(index_folder / HASH_FILE)
+    except FileNotFoundError:
+        pass
+
+
+@pytest.fixture(params=["./tests/mock_index_function_error"])
+def index_folder_function_error(request):
+    # Create venv
+    index_folder = Path(request.param)
+    venv_folder = index_folder / VENV_NAME
+    venv.create(venv_folder, symlinks=True, with_pip=True)
+    yield index_folder
+    # Clean up venv folder after tests
+    shutil.rmtree(venv_folder)
+    try:
+        os.remove(index_folder / HASH_FILE)
+    except FileNotFoundError:
+        pass
 
 
 @pytest.fixture(params=ProviderFormat)
