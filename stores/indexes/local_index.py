@@ -26,8 +26,13 @@ class LocalIndex(BaseIndex):
         create_venv: bool = False,
         env_var: dict | None = None,
     ):
-        self.index_folder = index_folder
+        self.index_folder = Path(index_folder)
         self.env_var = env_var or {}
+
+        if not self.index_folder.exists():
+            raise ValueError(
+                f"Unable to load index - {self.index_folder} does not exist"
+            )
 
         if create_venv:
             # Create venv and install deps
@@ -52,6 +57,9 @@ class LocalIndex(BaseIndex):
         NOTE: Can we just add index_folder to sys.path and import the functions?
         """
         index_manifest = self.index_folder / TOOLS_CONFIG_FILENAME
+        if not index_manifest.exists():
+            raise ValueError(f"Unable to load index - {index_manifest} does not exist")
+
         with open(index_manifest, "rb") as file:
             manifest = tomllib.load(file)["index"]
 
