@@ -155,7 +155,8 @@ def format_tools(
             }
         elif provider == ProviderFormat.ANTHROPIC:
             formatted_tool = {
-                "name": tool.__name__,
+                # Claude only supports ^[a-zA-Z0-9_-]{1,64}$
+                "name": tool.__name__.replace(".", "-"),
                 "description": description,
                 "input_schema": base_params,
             }
