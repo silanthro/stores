@@ -38,7 +38,7 @@ response = client.messages.create(
 
 # Execute the tool call
 tool_call = response.content[-1]
-fn_name = tool_call.name.replace("-", ".")
+fn_name = tool_call.name
 fn_args = tool_call.input
 result = index.execute(fn_name, fn_args)
 print(f"Tool output: {result}")

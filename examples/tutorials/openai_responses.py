@@ -38,7 +38,7 @@ response = client.responses.create(
 
 # Execute the tool call
 tool_call = response.output[0]
-fn_name = tool_call.name.replace("-", ".")
+fn_name = tool_call.name
 fn_args = json.loads(tool_call.arguments)
 result = index.execute(fn_name, fn_args)
 print(f"Tool output: {result}")
