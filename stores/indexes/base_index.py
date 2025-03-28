@@ -7,6 +7,7 @@ from typing import Callable, Optional, Union, get_args, get_origin
 
 from stores.format import ProviderFormat, format_tools
 from stores.parse import llm_parse_json
+from stores.utils import check_duplicates
 
 
 def wrap_tool(tool: Callable):
@@ -91,6 +92,7 @@ def wrap_tool(tool: Callable):
 
 class BaseIndex:
     def __init__(self, tools: list[Callable]):
+        check_duplicates([t.__name__ for t in tools])
         self.tools = [wrap_tool(t) for t in tools]
 
     @property

@@ -1,5 +1,4 @@
 import inspect
-from collections import Counter
 from enum import Enum
 from typing import (
     Callable,
@@ -9,6 +8,8 @@ from typing import (
     get_args,
     get_origin,
 )
+
+from stores.utils import check_duplicates
 
 
 class ProviderFormat(str, Enum):
@@ -95,10 +96,7 @@ def format_tools(
     """Format tools based on the provider's requirements."""
 
     # Check for duplicate tool names
-    tool_name_counts = Counter([tool.__name__ for tool in tools])
-    duplicates = [name for name in tool_name_counts if tool_name_counts[name] > 1]
-    if duplicates:
-        raise ValueError(f"Duplicate tool name(s): {duplicates}")
+    check_duplicates([t.__name__ for t in tools])
 
     formatted_tools = []
     for tool in tools:
