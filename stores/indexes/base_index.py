@@ -89,22 +89,16 @@ class BaseIndex:
     def execute(self, toolname: str, kwargs: dict | None = None):
         kwargs = kwargs or {}
 
-        if ":" not in toolname:
-            matching_tools = []
-            for key in self.tools_dict.keys():
-                if key == toolname or key.endswith(f":{toolname}"):
-                    matching_tools.append(key)
-            if len(matching_tools) == 0:
-                raise ValueError(f"No tool matching '{toolname}'")
-            elif len(matching_tools) > 1:
-                raise ValueError(
-                    f"'{toolname}' matches multiple tools - {matching_tools}"
-                )
-            else:
-                toolname = matching_tools[0]
-
-        if self.tools_dict.get(toolname) is None:
+        matching_tools = []
+        for key in self.tools_dict.keys():
+            if key == toolname or key.endswith(f":{toolname}"):
+                matching_tools.append(key)
+        if len(matching_tools) == 0:
             raise ValueError(f"No tool matching '{toolname}'")
+        elif len(matching_tools) > 1:
+            raise ValueError(f"'{toolname}' matches multiple tools - {matching_tools}")
+        else:
+            toolname = matching_tools[0]
 
         tool = self.tools_dict[toolname]
         if inspect.iscoroutinefunction(tool):
