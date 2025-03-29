@@ -110,8 +110,9 @@ def get_tool_signature(tool_id: str, index_folder: os.PathLike, venv: str = VENV
     tool_name = tool_id.split(".")[-1]
 
     runner = f"""
-import pickle, sys, traceback, inspect, typing, enum
-from typing import Any, Literal, get_args, get_origin, get_type_hints
+import pickle, sys, traceback, inspect, enum
+from typing import Any, Dict, List, Literal, Tuple, Union, get_args, get_origin, get_type_hints
+import types as T
 
 
 def extract_type_info(typ):
@@ -132,23 +133,23 @@ def extract_type_info(typ):
             "type_name": typ.__name__,
             "fields": {{k: extract_type_info(v) for k, v in hints.items()}}
         }}
-    elif origin in (list, typing.List):
+    elif origin in (list, List):
         return {{
             "type": "List",
             "item_type": extract_type_info(args[0]) if args else {{"type": Any}}
         }}
-    elif origin in (dict, typing.Dict):
+    elif origin in (dict, Dict):
         return {{
             "type": "Dict",
             "key_type": extract_type_info(args[0]) if args else {{"type": Any}},
             "value_type": extract_type_info(args[1]) if len(args) > 1 else {{"type": Any}}
         }}
-    elif origin in (tuple, typing.Tuple):
+    elif origin in (tuple, Tuple):
         return {{
             "type": "Tuple",
             "item_types": [extract_type_info(arg) for arg in args] if args else [{{"type": Any}}]
         }}
-    elif origin is typing.Union:
+    elif origin is Union or origin is T.UnionType:
         return {{
             "type": "Union",
             "options": [extract_type_info(arg) for arg in args]
