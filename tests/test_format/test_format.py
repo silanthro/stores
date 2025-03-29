@@ -197,16 +197,6 @@ def test_list_type_formatting(provider):
     check_minimum_properties(output_format, tool_with_lists_min_args)
 
 
-def test_unsupported_type(provider):
-    """Test that unsupported types raise TypeError."""
-
-    def tool_with_set(param: set):  # set type is not supported
-        pass
-
-    with pytest.raises(TypeError, match="Unsupported type: set"):
-        format_tools([tool_with_set], provider)
-
-
 def test_multiple_tools(many_tools):
     """Test formatting multiple tools in a single call."""
 
@@ -239,3 +229,9 @@ def test_complex_argtype_openai_chat(a_tool_with_complex_args):
     expected_schema = a_tool_with_complex_args["expected_schema"]
     output = format_tools([tool_fn], provider)
     assert output == [expected_schema]
+
+
+def test_unsupported_type(provider, a_tool_with_invalid_args):
+    """Test that unsupported types raise TypeError."""
+    with pytest.raises(TypeError, match=a_tool_with_invalid_args["error_msg"]):
+        format_tools([a_tool_with_invalid_args["tool_fn"]], provider)

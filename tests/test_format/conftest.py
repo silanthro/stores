@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import TypedDict
+from typing import Dict, List, Literal, Tuple, TypedDict
 
 import pytest
 
@@ -42,7 +42,12 @@ class Color(Enum):
     BLUE = "blue"
 
 
-def complex_foo(animal: Animal, color: Color):
+def complex_foo(
+    animal: Animal,
+    color: Color,
+    levels: Literal["a", "b", "c"],
+    words: Tuple[str],
+):
     pass
 
 
@@ -70,8 +75,21 @@ def a_tool_with_complex_args(provider):
             "enum": ["red", "green", "blue"],
             "description": "",
         },
+        "levels": {
+            "type": "string",
+            "enum": ["a", "b", "c"],
+            "description": "",
+        },
+        "words": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "description": "",
+            },
+            "description": "",
+        },
     }
-    required_params = ["animal", "color"]
+    required_params = list(parameters.keys())
     input_schema = {
         "type": "object",
         "properties": parameters,
@@ -122,4 +140,35 @@ def a_tool_with_complex_args(provider):
         "tool_fn": tool,
         "expected_schema": schema,
         "provider": provider,
+    }
+
+
+def tool_with_set(param: set):
+    pass
+
+
+def tool_with_dict(param: Dict):
+    pass
+
+
+def tool_with_empty_tuple(param: Tuple):
+    pass
+
+
+def tool_with_empty_list(param: List):
+    pass
+
+
+@pytest.fixture(
+    params=[
+        (tool_with_set, "Unsupported type"),
+        (tool_with_dict, "Insufficient argument type information"),
+        (tool_with_empty_tuple, "Insufficient argument type information"),
+        (tool_with_empty_list, "Insufficient argument type information"),
+    ]
+)
+def a_tool_with_invalid_args(request):
+    yield {
+        "tool_fn": request.param[0],
+        "error_msg": request.param[1],
     }
