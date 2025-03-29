@@ -72,7 +72,7 @@ def get_type_schema(typ: Type | GenericAlias):
     }
 
     if origin is Literal:
-        schema["enum"] = args
+        schema["enum"] = list(args)
     elif inspect.isclass(typ) and issubclass(typ, Enum):
         schema["enum"] = [v.value for v in typ]
     elif isinstance(typ, type) and typ.__class__.__name__ == "_TypedDictMeta":
