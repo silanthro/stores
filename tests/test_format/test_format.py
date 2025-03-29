@@ -1,10 +1,15 @@
 import inspect
+import logging
 import re
 from typing import List, Optional, Union
 
 import pytest
 
 from stores.format import ProviderFormat, format_tools
+
+logging.basicConfig()
+logger = logging.getLogger("stores.test_format.test_format")
+logger.setLevel(logging.INFO)
 
 
 def sample_tool(
@@ -226,3 +231,11 @@ def test_duplicate_tool_names(a_tool):
             [a_tool, a_tool],
             ProviderFormat.OPENAI_CHAT,
         )
+
+
+def test_complex_argtype_openai_chat(a_tool_with_complex_args):
+    tool_fn = a_tool_with_complex_args["tool_fn"]
+    provider = a_tool_with_complex_args["provider"]
+    expected_schema = a_tool_with_complex_args["expected_schema"]
+    output = format_tools([tool_fn], provider)
+    assert output == [expected_schema]
