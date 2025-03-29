@@ -28,7 +28,7 @@ index = stores.Index(
 # Initialize the LlamaIndex agent with tools
 llm = GoogleGenAI(model="models/gemini-2.0-flash-001")
 tools = [
-    FunctionTool.from_defaults(fn=tool_function) for tool_function in index.tools
+    FunctionTool.from_defaults(fn=fn) for fn in index.tools
 ]  # Use LlamaIndex FunctionTool
 agent = AgentRunner.from_llm(tools, llm=llm, verbose=True)
 
