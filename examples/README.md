@@ -60,6 +60,8 @@ The tutorial scripts require the following environment variables:
 - GMAIL_ADDRESS: The Gmail address for sending emails.
 - GMAIL_PASSWORD: This is NOT your regular Gmail password, but a 16-character App Password created via https://myaccount.google.com/apppasswords (see below). Treat this like you would treat your regular password e.g. do not upload this in plaintext or share this publicly
 
+You will also need the API keys for the respective LLM providers that you are using.
+
 ### App Passwords
 
 In the event that the App Password is no longer required, it can be revoked without affecting your regular password.

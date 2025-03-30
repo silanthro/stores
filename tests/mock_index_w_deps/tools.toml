@@ -1,0 +1,14 @@
+[index]
+
+tools = [
+  "mock_index.get_package",
+  "mock_index.async_get_package",
+  "mock_index.typed_function",
+  "mock_index.literal_input",
+  "mock_index.enum_input",
+  "mock_index.typed_dict_input",
+  "mock_index.list_input",
+  "mock_index.dict_input",
+  "mock_index.tuple_input",
+  "mock_index.union_input",
+]
