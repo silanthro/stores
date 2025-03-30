@@ -78,6 +78,8 @@ def get_type_schema(typ: Type | GenericAlias):
     elif isinstance(typ, type) and typ.__class__.__name__ == "_TypedDictMeta":
         hints = get_type_hints(typ)
         schema["properties"] = {k: get_type_schema(v) for k, v in hints.items()}
+        schema["additionalProperties"] = False
+        schema["required"] = list(hints.keys())
     elif origin in (list, List):
         if args:
             schema["items"] = get_type_schema(args[0])

@@ -69,6 +69,8 @@ def a_tool_with_complex_args(provider):
                 },
             },
             "description": "",
+            "required": ["name", "num_legs"],
+            "additionalProperties": False,
         },
         "color": {
             "type": "string",
