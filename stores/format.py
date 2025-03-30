@@ -126,6 +126,10 @@ def get_param_schema(param: inspect.Parameter, provider: ProviderFormat):
             param_schema["type"] = param_schema["type"][0]
         # Add nullable property for Gemini
         param_schema["nullable"] = param.default is not inspect.Parameter.empty
+        if param_schema["type"] == "object":
+            logger.warning(
+                f'Type of argument {param.name} is {param.annotation}, which is being formatted as an "object" type. However, Gemini does not seem to officially support an "object" parameter type yet and success rate might be spotty. Proceed with caution, or refactor {param.name} into one of the basic supported types: [string, integer, boolean, array].'
+            )
     return param_schema
 
 
