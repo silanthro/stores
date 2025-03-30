@@ -28,7 +28,7 @@ index = stores.Index(
 )
 
 # Get the response from the model
-completion = client.chat.completions.create(
+response = client.chat.completions.create(
     model="gpt-4o-mini-2024-07-18",
     messages=[
         {"role": "user", "content": "Send a haiku about dreams to email@example.com"}
@@ -37,7 +37,7 @@ completion = client.chat.completions.create(
 )
 
 # Execute the tool call
-tool_call = completion.choices[0].message.tool_calls[0]
+tool_call = response.choices[0].message.tool_calls[0]
 result = index.execute(
     tool_call.function.name,
     json.loads(tool_call.function.arguments),
