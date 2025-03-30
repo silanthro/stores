@@ -1,8 +1,15 @@
+import inspect
+import logging
+import re
 from typing import List, Optional, Union
 
 import pytest
 
-from stores.index import ProviderFormat
+from stores.format import ProviderFormat, format_tools
+
+logging.basicConfig()
+logger = logging.getLogger("stores.test_format.test_format")
+logger.setLevel(logging.INFO)
 
 
 def sample_tool(
@@ -47,17 +54,6 @@ sample_tool_union_types = {
     "union_param": ["string", "integer", "null"],
 }
 
-sample_tool_description = """Sample tool with various parameter types.
-
-Args:
-    str_param: A string parameter
-    int_param: An integer parameter
-    bool_param: A boolean parameter
-    float_param: A float parameter
-    default_param: A string parameter with a default value
-    optional_param: An optional string parameter
-    union_param: A parameter that can be string or integer"""
-
 
 def check_minimum_properties(input_dict: dict, model_dict: dict):
     for key, value in model_dict.items():
@@ -72,15 +68,17 @@ def check_union_mappings(params: dict, expected_types: dict):
         assert params[param_name]["type"] == expected_type
 
 
-def test_openai_chat_format(clean_index):
+def test_openai_chat_format():
     """Test OpenAI Chat format requirements."""
-    clean_index.tools = [sample_tool]
-    formatted_tools = clean_index.format_tools(ProviderFormat.OPENAI_CHAT)
+    formatted_tools = format_tools(
+        [sample_tool],
+        ProviderFormat.OPENAI_CHAT,
+    )
 
     tool = formatted_tools[0]
     assert tool["type"] == "function"
-    assert tool["function"]["name"] == "sample_tool"
-    assert tool["function"]["description"] == sample_tool_description
+    assert tool["function"]["name"] == sample_tool.__name__
+    assert tool["function"]["description"] == inspect.getdoc(sample_tool)
 
     # Test type mappings
     params = tool["function"]["parameters"]
@@ -94,15 +92,17 @@ def test_openai_chat_format(clean_index):
     assert params["additionalProperties"] is False
 
 
-def test_openai_responses_format(clean_index):
+def test_openai_responses_format():
     """Test OpenAI Responses format requirements."""
-    clean_index.tools = [sample_tool]
-    formatted_tools = clean_index.format_tools(ProviderFormat.OPENAI_RESPONSES)
+    formatted_tools = format_tools(
+        [sample_tool],
+        ProviderFormat.OPENAI_RESPONSES,
+    )
 
     tool = formatted_tools[0]
     assert tool["type"] == "function"
-    assert tool["name"] == "sample_tool"
-    assert tool["description"] == sample_tool_description
+    assert tool["name"] == sample_tool.__name__
+    assert tool["description"] == inspect.getdoc(sample_tool)
 
     # Test type mappings
     params = tool["parameters"]
@@ -115,14 +115,16 @@ def test_openai_responses_format(clean_index):
     assert params["additionalProperties"] is False
 
 
-def test_anthropic_format(clean_index):
+def test_anthropic_format():
     """Test Anthropic format requirements."""
-    clean_index.tools = [sample_tool]
-    formatted_tools = clean_index.format_tools(ProviderFormat.ANTHROPIC)
+    formatted_tools = format_tools(
+        [sample_tool],
+        ProviderFormat.ANTHROPIC,
+    )
 
     tool = formatted_tools[0]
-    assert tool["name"] == "sample_tool"
-    assert tool["description"] == sample_tool_description
+    assert tool["name"] == sample_tool.__name__
+    assert tool["description"] == inspect.getdoc(sample_tool)
 
     params = tool["input_schema"]
     assert params["type"] == "object"
@@ -134,15 +136,17 @@ def test_anthropic_format(clean_index):
     check_union_mappings(params["properties"], sample_tool_union_types)
 
 
-def test_gemini_format(clean_index):
+def test_gemini_format():
     """Test Google Gemini format requirements."""
-    clean_index.tools = [sample_tool]
-    formatted_tools = clean_index.format_tools(ProviderFormat.GOOGLE_GEMINI)
+    formatted_tools = format_tools(
+        [sample_tool],
+        ProviderFormat.GOOGLE_GEMINI,
+    )
 
     tool = formatted_tools[0]
-    assert tool["name"] == "sample_tool"
+    assert tool["name"] == sample_tool.__name__
     params = tool["parameters"]
-    assert params["description"] == sample_tool_description
+    assert params["description"] == inspect.getdoc(sample_tool)
     assert params["type"] == "object"
 
     # Test standard type mappings
@@ -158,7 +162,7 @@ def test_gemini_format(clean_index):
     assert params["properties"]["str_param"]["nullable"] is False
 
 
-def test_list_type_formatting(clean_index, provider):
+def test_list_type_formatting(provider):
     """Test list type handling across providers."""
 
     def tool_with_lists(
@@ -177,7 +181,6 @@ def test_list_type_formatting(clean_index, provider):
         "float_list": {"type": "array", "items": {"type": "number"}},
     }
 
-    clean_index.tools = [tool_with_lists]
     provider_mappings = {
         ProviderFormat.OPENAI_CHAT: ["function", "parameters", "properties"],
         ProviderFormat.OPENAI_RESPONSES: ["parameters", "properties"],
@@ -185,58 +188,50 @@ def test_list_type_formatting(clean_index, provider):
         ProviderFormat.ANTHROPIC: ["input_schema", "properties"],
     }
 
-    output_format = clean_index.format_tools(provider)[0]
+    output_format = format_tools(
+        [tool_with_lists],
+        provider,
+    )[0]
     for key in provider_mappings[provider]:
         output_format = output_format[key]
     check_minimum_properties(output_format, tool_with_lists_min_args)
 
 
-def test_unsupported_type(clean_index, provider):
-    """Test that unsupported types raise TypeError."""
-
-    def tool_with_set(param: set):  # set type is not supported
-        pass
-
-    clean_index.tools = [tool_with_set]
-    with pytest.raises(TypeError, match="Unsupported type: set"):
-        clean_index.format_tools(provider)
-
-
-def test_empty_tools_list(clean_index):
-    """Test that empty tools list raises ValueError."""
-    clean_index.tools = []
-    with pytest.raises(ValueError, match="No tools provided to format"):
-        clean_index.format_tools(ProviderFormat.OPENAI_CHAT)
-
-
-def test_multiple_tools(clean_index):
+def test_multiple_tools(many_tools):
     """Test formatting multiple tools in a single call."""
 
-    def tool_one(param1: str):
-        """First tool."""
-        pass
+    formatted_tools = format_tools(
+        many_tools,
+        ProviderFormat.OPENAI_CHAT,
+    )
 
-    def tool_two(param2: int):
-        """Second tool."""
-        pass
-
-    clean_index.tools = [tool_one, tool_two]
-    formatted_tools = clean_index.format_tools(ProviderFormat.OPENAI_CHAT)
-
-    assert len(formatted_tools) == 2
-    assert formatted_tools[0]["function"]["name"] == "tool_one"
-    assert formatted_tools[0]["function"]["description"] == "First tool."
-    assert formatted_tools[1]["function"]["name"] == "tool_two"
-    assert formatted_tools[1]["function"]["description"] == "Second tool."
+    assert len(formatted_tools) == len(many_tools)
+    for i, tool in enumerate(many_tools):
+        assert formatted_tools[i]["function"]["name"] == tool.__name__
+        assert formatted_tools[i]["function"]["description"] == inspect.getdoc(tool)
 
 
-def test_duplicate_tool_names(clean_index):
+def test_duplicate_tool_names(a_tool):
     """Test that duplicate tool names raise ValueError."""
 
-    def first_tool(param1: str):
-        """First tool."""
-        pass
+    with pytest.raises(
+        ValueError, match=re.escape(f"Found duplicate(s): {[a_tool.__name__]}")
+    ):
+        format_tools(
+            [a_tool, a_tool],
+            ProviderFormat.OPENAI_CHAT,
+        )
 
-    clean_index.tools = [first_tool, first_tool]
-    with pytest.raises(ValueError, match=r"Duplicate tool name\(s\): \['first_tool'\]"):
-        clean_index.format_tools(ProviderFormat.OPENAI_CHAT)
+
+def test_complex_argtype_openai_chat(a_tool_with_complex_args):
+    tool_fn = a_tool_with_complex_args["tool_fn"]
+    provider = a_tool_with_complex_args["provider"]
+    expected_schema = a_tool_with_complex_args["expected_schema"]
+    output = format_tools([tool_fn], provider)
+    assert output == [expected_schema]
+
+
+def test_unsupported_type(provider, a_tool_with_invalid_args):
+    """Test that unsupported types raise TypeError."""
+    with pytest.raises(TypeError, match=a_tool_with_invalid_args["error_msg"]):
+        format_tools([a_tool_with_invalid_args["tool_fn"]], provider)

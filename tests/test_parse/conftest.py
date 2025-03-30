@@ -45,6 +45,15 @@ def str_object(request):
             },
             "keys": ["foo", "hello"],
         },
+        # Get larger json with given keys
+        {
+            "string": """{
+                "foo": ""bar"",
+                "hello": ""world"",
+            }""",
+            "object": {"foo": '"bar"",\n                "hello": ""world"'},
+            "keys": ["foo"],
+        },
     ],
 )
 def dirty_string(request):
