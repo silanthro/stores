@@ -16,23 +16,14 @@ dotenv.load_dotenv()
 # Initialize Google Gemini client
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
-# Load tools and set the required environment variables
-index = stores.Index(
-    ["silanthro/send-gmail"],
-    env_var={
-        "silanthro/send-gmail": {
-            "GMAIL_ADDRESS": os.environ["GMAIL_ADDRESS"],
-            "GMAIL_PASSWORD": os.environ["GMAIL_PASSWORD"],
-        },
-    },
-)
+# Load the Hacker News tool
+index = stores.Index(["silanthro/hackernews"])
 
 # Initialize the chat with the model
 config = types.GenerateContentConfig(tools=index.tools)
 chat = client.chats.create(model="gemini-2.0-flash", config=config)
 
-# Get the response from the model. Gemini will automatically execute the tool call.
-response = chat.send_message(
-    "Send a haiku about dreams to email@example.com. Don't ask questions."
-)
+# Get the response from the model. Gemini will automatically execute tool calls
+# and generate a response.
+response = chat.send_message("What are the top 10 posts on Hacker News today?")
 print(f"Assistant response: {response.candidates[0].content.parts[0].text}")

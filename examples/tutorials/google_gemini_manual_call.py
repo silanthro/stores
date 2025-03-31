@@ -16,29 +16,21 @@ dotenv.load_dotenv()
 # Initialize Google Gemini client
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
-# Load custom tools and set the required environment variables
-index = stores.Index(
-    ["silanthro/send-gmail"],
-    env_var={
-        "silanthro/send-gmail": {
-            "GMAIL_ADDRESS": os.environ["GMAIL_ADDRESS"],
-            "GMAIL_PASSWORD": os.environ["GMAIL_PASSWORD"],
-        },
-    },
-)
+# Load the Hacker News tool
+index = stores.Index(["silanthro/hackernews"])
 
 # Configure the model with tools
 config = types.GenerateContentConfig(
     tools=index.tools,
     automatic_function_calling=types.AutomaticFunctionCallingConfig(
-        disable=True  # Gemini automatically executes tool calls. This script shows how to manually execute tool calls.
+        disable=True  # Disable automatic function calling to manually execute tool calls
     ),
 )
 
 # Get the response from the model
 response = client.models.generate_content(
     model="gemini-2.0-flash",
-    contents="Send a haiku about dreams to email@example.com. Don't ask questions.",
+    contents="What are the top 10 posts on Hacker News today?",
     config=config,
 )
 

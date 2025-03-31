@@ -3,7 +3,6 @@ This example shows how to use stores with OpenAI's Responses API.
 """
 
 import json
-import os
 
 import dotenv
 from openai import OpenAI
@@ -16,24 +15,18 @@ dotenv.load_dotenv()
 # Initialize OpenAI client
 client = OpenAI()
 
-# Load tools and set the required environment variables
-index = stores.Index(
-    ["silanthro/send-gmail"],
-    env_var={
-        "silanthro/send-gmail": {
-            "GMAIL_ADDRESS": os.environ["GMAIL_ADDRESS"],
-            "GMAIL_PASSWORD": os.environ["GMAIL_PASSWORD"],
-        },
-    },
-)
+# Load the Hacker News tool
+index = stores.Index(["silanthro/hackernews"])
 
 # Get the response from the model
 response = client.responses.create(
     model="gpt-4o-mini-2024-07-18",
     input=[
-        {"role": "user", "content": "Send a haiku about dreams to email@example.com"}
+        {"role": "user", "content": "What are the top 10 posts on Hacker News today?"}
     ],
-    tools=index.format_tools("openai-responses"),
+    tools=index.format_tools(
+        "openai-responses"
+    ),  # Format tools for OpenAI Responses API
 )
 
 # Execute the tool call

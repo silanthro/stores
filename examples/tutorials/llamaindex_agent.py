@@ -2,8 +2,6 @@
 This example shows how to use stores with a LlamaIndex agent.
 """
 
-import os
-
 import dotenv
 from llama_index.core.agent import AgentRunner
 from llama_index.core.tools import FunctionTool
@@ -14,16 +12,8 @@ import stores
 dotenv.load_dotenv()
 
 
-# Load tools and set the required environment variables
-index = stores.Index(
-    ["silanthro/send-gmail"],
-    env_var={
-        "silanthro/send-gmail": {
-            "GMAIL_ADDRESS": os.environ["GMAIL_ADDRESS"],
-            "GMAIL_PASSWORD": os.environ["GMAIL_PASSWORD"],
-        },
-    },
-)
+# Load the Hacker News tool
+index = stores.Index(["silanthro/hackernews"])
 
 # Initialize the LlamaIndex agent with tools
 llm = GoogleGenAI(model="models/gemini-2.0-flash-001")
@@ -32,8 +22,7 @@ tools = [
 ]  # Use LlamaIndex FunctionTool
 agent = AgentRunner.from_llm(tools, llm=llm, verbose=True)
 
-# Get the response from the LlamaIndex agent. LlamaIndex agent will automatically execute the tool call.
-response = agent.chat(
-    "Send a haiku about dreams to email@example.com. Don't ask questions."
-)
+# Get the response from the agent. The LlamaIndex agent will automatically execute
+# tool calls and generate a response.
+response = agent.chat("What are the top 10 posts on Hacker News today?")
 print(f"Assistant response: {response}")
