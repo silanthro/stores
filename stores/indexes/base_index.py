@@ -23,6 +23,9 @@ def wrap_tool(tool: Callable):
     If there are any default args, we set default value to None
     and inject the correct default value at runtime.
     """
+    if hasattr(tool, "_wrapped") and tool._wrapped:
+        return tool
+
     # Retrieve default arguments
     original_signature = inspect.signature(tool)
     new_args = []
@@ -79,6 +82,7 @@ def wrap_tool(tool: Callable):
 
     functools.update_wrapper(wrapper, tool)
     wrapper.__signature__ = new_sig
+    wrapper._wrapped = True
 
     return wrapper
 
