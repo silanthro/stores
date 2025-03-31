@@ -4,8 +4,18 @@ import inspect
 import logging
 import re
 from inspect import Parameter
-from types import NoneType
-from typing import Callable, Optional, Union, get_args, get_origin
+from types import NoneType, UnionType
+from typing import (
+    Any,
+    Callable,
+    List,
+    Optional,
+    Tuple,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 from stores.format import ProviderFormat, format_tools
 from stores.parse import llm_parse_json
@@ -14,6 +24,57 @@ from stores.utils import check_duplicates
 logging.basicConfig()
 logger = logging.getLogger("stores.indexes.local_index")
 logger.setLevel(logging.INFO)
+
+
+def _cast_arg(value: Any, typ: type | tuple[type]):
+    try:
+        if isinstance(typ, tuple) and len(typ) == 1:
+            typ = typ[0]
+        typ_origin = get_origin(typ)
+        if typ in [float, int, str]:
+            return typ(value)
+        if typ is bool:
+            if isinstance(value, str) and value.lower() == "false":
+                return False
+            else:
+                return typ(value)
+        if typ_origin in (list, List) and isinstance(value, (list, tuple)):
+            return [_cast_arg(v, get_args(typ)) for v in value]
+        if typ_origin in (tuple, Tuple) and isinstance(value, (list, tuple)):
+            return tuple(_cast_arg(v, get_args(typ)) for v in value)
+        if isinstance(typ, type) and typ.__class__.__name__ == "_TypedDictMeta":
+            hints = get_type_hints(typ)
+            for k, v in value.items():
+                value[k] = _cast_arg(v, hints[k])
+            return value
+        if typ_origin in [Union, UnionType]:
+            valid_types = [a for a in get_args(typ) if a is not NoneType]
+            if len(valid_types) == 1:
+                return _cast_arg(value, valid_types[0])
+    except Exception:
+        pass
+    # If not in one of the cases above, we return value unchanged
+    return value
+
+
+def _cast_bound_args(bound_args: inspect.BoundArguments):
+    """
+    In some packages, passed argument types are incorrect
+    e.g. LangChain returns float even when argtype is int
+    This only casts basic argtypes
+    """
+    for arg, argparam in bound_args.signature.parameters.items():
+        argtype = argparam.annotation
+        value = bound_args.arguments[arg]
+        new_value = _cast_arg(value, argtype)
+        if new_value != value:
+            # Warn that we are modifying value since this might not be expected
+            logger.warning(
+                f'Argument "{arg}" is type {argtype} but passed value is {value} of type {type(value)} - modifying value to {value} instead.'
+            )
+        bound_args.arguments[arg] = new_value
+
+    return bound_args
 
 
 def wrap_tool(tool: Callable):
@@ -71,6 +132,7 @@ def wrap_tool(tool: Callable):
             # Inject default values within wrapper
             bound_args = original_signature.bind(*args, **kwargs)
             bound_args.apply_defaults()
+            _cast_bound_args(bound_args)
             return await tool(*bound_args.args, **bound_args.kwargs)
     else:
 
@@ -78,6 +140,7 @@ def wrap_tool(tool: Callable):
             # Inject default values within wrapper
             bound_args = original_signature.bind(*args, **kwargs)
             bound_args.apply_defaults()
+            _cast_bound_args(bound_args)
             return tool(*bound_args.args, **bound_args.kwargs)
 
     functools.update_wrapper(wrapper, tool)
@@ -101,7 +164,7 @@ class BaseIndex:
 
         # Use regex since we need to match cases where we perform
         # substitutions such as replace(".", "-")
-        pattern = re.compile(":?" + re.sub("-|\.", "(-|\.)", toolname) + "$")
+        pattern = re.compile(":?" + re.sub("-|\\.", "(-|\\.)", toolname) + "$")
 
         matching_tools = []
         for key in self.tools_dict.keys():

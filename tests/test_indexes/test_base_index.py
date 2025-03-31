@@ -49,6 +49,11 @@ async def test_wrap_tool_w_defaults(sample_tool_w_defaults):
         assert wrapped_tool() == original_result
 
 
+def test_cast_bound_args(cast_tool):
+    wrapped_fn = wrap_tool(cast_tool["tool_fn"])
+    assert cast_tool["test"](wrapped_fn(cast_tool["input"]))
+
+
 # If tool has Optional parameter without default, it should remove the Optional
 async def test_wrap_tool_option_no_default(sample_tool_optional_no_default):
     tool_fn = sample_tool_optional_no_default["function"]
