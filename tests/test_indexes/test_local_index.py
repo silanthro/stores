@@ -5,7 +5,7 @@ import pytest
 from stores.indexes import LocalIndex
 
 
-def test_local_index(local_index_folder):
+def test_local_index_basic(local_index_folder):
     index = LocalIndex(local_index_folder)
     assert [t.__name__ for t in index.tools] == [
         "tools.foo",
@@ -34,8 +34,8 @@ def test_local_index(local_index_folder):
         )
         assert result == sample_inputs[tool.__name__]
         # Test parse_and_execute
-        message = f"""{{"toolname": "tools.foo", "kwargs": {{"bar": {json.dumps(sample_inputs[tool.__name__])}}}}}"""
-    assert index.parse_and_execute(message) == sample_inputs[tool.__name__]
+        message = f"""{{"toolname": "{tool.__name__}", "kwargs": {{"bar": {json.dumps(sample_inputs[tool.__name__])}}}}}"""
+        assert index.parse_and_execute(message) == sample_inputs[tool.__name__]
 
 
 def test_local_index_invalid_tool(local_index_folder):
