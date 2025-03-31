@@ -290,7 +290,6 @@ def parse_tool_signature(
         doc=signature_dict.get("doc"),
     )
     func.__name__ = signature_dict["tool_id"]
-    # func = wrap_tool(func)
     return func
 
 
