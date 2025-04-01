@@ -351,3 +351,118 @@ def index_folder_function_error(request):
 @pytest.fixture(params=ProviderFormat)
 def provider(request):
     yield request.param
+
+
+def cast_foo_int(bar: int):
+    return bar
+
+
+def cast_foo_float(bar: float):
+    return bar
+
+
+def cast_foo_str(bar: str):
+    return bar
+
+
+def cast_foo_bool(bar: bool):
+    return bar
+
+
+def cast_foo_list(bar: list[int]):
+    return bar
+
+
+def cast_foo_tuple(bar: tuple[int]):
+    return bar
+
+
+def cast_foo_typeddict(bar: Animal):
+    return bar
+
+
+def cast_foo_optional(bar: Optional[int] = None):
+    return bar
+
+
+def cast_foo_unhandled(bar: list[str, int]):
+    return bar
+
+
+@pytest.fixture(
+    params=[
+        {
+            "tool_fn": cast_foo_int,
+            "input": 1.0,
+            "test": lambda x: x == 1 and isinstance(x, int),
+        },
+        {
+            "tool_fn": cast_foo_float,
+            "input": 1,
+            "test": lambda x: x == 1.0 and isinstance(x, float),
+        },
+        {
+            "tool_fn": cast_foo_str,
+            "input": 1,
+            "output_type": str,
+            "test": lambda x: x == "1",
+        },
+        {
+            "tool_fn": cast_foo_bool,
+            "input": 1,
+            "test": lambda x: x is True and isinstance(x, bool),
+        },
+        {
+            "tool_fn": cast_foo_bool,
+            "input": 0,
+            "test": lambda x: x is False and isinstance(x, bool),
+        },
+        {
+            "tool_fn": cast_foo_bool,
+            "input": "false",
+            "test": lambda x: x is False and isinstance(x, bool),
+        },
+        {
+            "tool_fn": cast_foo_list,
+            "input": [1.0],
+            "test": lambda x: isinstance(x, list)
+            and x[0] == 1
+            and isinstance(x[0], int),
+        },
+        {
+            "tool_fn": cast_foo_tuple,
+            "input": [1.0],
+            "test": lambda x: isinstance(x, tuple)
+            and x[0] == 1
+            and isinstance(x[0], int),
+        },
+        {
+            "tool_fn": cast_foo_typeddict,
+            "input": {
+                "num_legs": 1.0,
+                "name": 1,
+            },
+            "test": lambda x: x["num_legs"] == 1
+            and isinstance(x["num_legs"], int)
+            and x["name"] == "1",
+        },
+        {
+            "tool_fn": cast_foo_optional,
+            "input": 1.0,
+            "test": lambda x: x == 1 and isinstance(x, int),
+        },
+        {
+            "tool_fn": cast_foo_unhandled,
+            "input": "unhandled",
+            "test": lambda x: x == "unhandled",
+        },
+        {
+            # Error case should also be unhandled
+            "tool_fn": cast_foo_int,
+            "input": "unhandled",
+            "test": lambda x: x == "unhandled",
+        },
+    ]
+)
+def cast_tool(request):
+    yield request.param
