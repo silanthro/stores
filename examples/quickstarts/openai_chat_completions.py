@@ -4,22 +4,19 @@ This example shows how to use stores with OpenAI's Chat Completions API.
 
 import json
 
-import dotenv
 from openai import OpenAI
 
 import stores
-
-dotenv.load_dotenv()
 
 
 # Initialize OpenAI client
 client = OpenAI()
 
-# Load the Hacker News tool
+# Load the Hacker News tool index
 index = stores.Index(["silanthro/hackernews"])
 
 # Get the response from the model
-response = client.chat.completions.create(
+completion = client.chat.completions.create(
     model="gpt-4o-mini-2024-07-18",
     messages=[
         {"role": "user", "content": "What are the top 10 posts on Hacker News today?"}
@@ -30,7 +27,7 @@ response = client.chat.completions.create(
 )
 
 # Execute the tool call
-tool_call = response.choices[0].message.tool_calls[0]
+tool_call = completion.choices[0].message.tool_calls[0]
 result = index.execute(
     tool_call.function.name,
     json.loads(tool_call.function.arguments),

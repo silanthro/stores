@@ -2,15 +2,12 @@
 This example shows how to use stores with LangChain with native function calls.
 """
 
-import dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 import stores
 
-dotenv.load_dotenv()
 
-
-# Load the Hacker News tool
+# Load the Hacker News tool index
 index = stores.Index(["silanthro/hackernews"])
 
 # Initialize the model with tools

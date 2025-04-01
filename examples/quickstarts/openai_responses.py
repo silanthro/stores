@@ -4,18 +4,15 @@ This example shows how to use stores with OpenAI's Responses API.
 
 import json
 
-import dotenv
 from openai import OpenAI
 
 import stores
-
-dotenv.load_dotenv()
 
 
 # Initialize OpenAI client
 client = OpenAI()
 
-# Load the Hacker News tool
+# Load the Hacker News tool index
 index = stores.Index(["silanthro/hackernews"])
 
 # Get the response from the model

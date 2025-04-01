@@ -4,15 +4,12 @@ This example shows how to use stores with LiteLLM with native function calls.
 
 import json
 
-import dotenv
 from litellm import completion
 
 import stores
 
-dotenv.load_dotenv()
 
-
-# Load the Hacker News tool
+# Load the Hacker News tool index
 index = stores.Index(["silanthro/hackernews"])
 
 # Get the response from the model
