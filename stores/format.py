@@ -93,7 +93,13 @@ def get_type_schema(typ: Type | GenericAlias):
         else:
             raise TypeError("Insufficient argument type information")
     elif origin is Union or origin is T.UnionType:
-        pass
+        for arg in args:
+            subschema = get_type_schema(arg)
+            del subschema["type"]
+            schema = {
+                **schema,
+                **subschema,
+            }
 
     # Un-nest single member type lists since Gemini does not accept list of types
     # Optional for OpenAI or Anthropic
