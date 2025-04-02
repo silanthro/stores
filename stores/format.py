@@ -41,11 +41,11 @@ def get_type_repr(typ: Type | GenericAlias) -> list[str]:
         return list(dict.fromkeys(chain(*[get_type_repr(type(v.value)) for v in typ])))
     if isinstance(typ, type) and typ.__class__.__name__ == "_TypedDictMeta":
         return ["object"]
-    if origin in (list, List):
+    if origin in (list, List) or typ is list:
         return ["array"]
-    if origin in (dict, Dict):
+    if origin in (dict, Dict) or typ is dict:
         return ["object"]
-    if origin in (tuple, Tuple):
+    if origin in (tuple, Tuple) or typ is tuple:
         return ["array"]
     if origin is Union or origin is T.UnionType:
         return list(dict.fromkeys(chain(*[get_type_repr(arg) for arg in args])))
@@ -80,14 +80,14 @@ def get_type_schema(typ: Type | GenericAlias):
         schema["properties"] = {k: get_type_schema(v) for k, v in hints.items()}
         schema["additionalProperties"] = False
         schema["required"] = list(hints.keys())
-    elif origin in (list, List):
+    elif origin in (list, List) or typ is dict:
         if args:
             schema["items"] = get_type_schema(args[0])
         else:
             raise TypeError("Insufficient argument type information")
-    elif origin in (dict, Dict):
+    elif origin in (dict, Dict) or typ is dict:
         raise TypeError("Insufficient argument type information")
-    elif origin in (tuple, Tuple):
+    elif origin in (tuple, Tuple) or typ is tuple:
         if args:
             schema["items"] = get_type_schema(args[0])
         else:

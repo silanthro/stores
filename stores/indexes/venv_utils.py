@@ -133,18 +133,18 @@ def extract_type_info(typ):
             "type_name": typ.__name__,
             "fields": {{k: extract_type_info(v) for k, v in hints.items()}}
         }}
-    elif origin in (list, List):
+    elif origin in (list, List) or typ is list:
         return {{
             "type": "List",
             "item_type": extract_type_info(args[0]) if args else {{"type": Any}}
         }}
-    elif origin in (dict, Dict):
+    elif origin in (dict, Dict) or typ is dict:
         return {{
             "type": "Dict",
             "key_type": extract_type_info(args[0]) if args else {{"type": Any}},
             "value_type": extract_type_info(args[1]) if len(args) > 1 else {{"type": Any}}
         }}
-    elif origin in (tuple, Tuple):
+    elif origin in (tuple, Tuple) or typ is tuple:
         return {{
             "type": "Tuple",
             "item_types": [extract_type_info(arg) for arg in args] if args else [{{"type": Any}}]
