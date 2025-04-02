@@ -22,7 +22,7 @@ from stores.parse import llm_parse_json
 from stores.utils import check_duplicates
 
 logging.basicConfig()
-logger = logging.getLogger("stores.indexes.local_index")
+logger = logging.getLogger("stores.indexes.base_index")
 logger.setLevel(logging.INFO)
 
 
@@ -48,6 +48,8 @@ def _cast_arg(value: Any, typ: type | tuple[type]):
                 value[k] = _cast_arg(v, hints[k])
             return value
         if typ_origin in [Union, UnionType]:
+            if NoneType in get_args(typ) and value is None:
+                return value
             valid_types = [a for a in get_args(typ) if a is not NoneType]
             if len(valid_types) == 1:
                 return _cast_arg(value, valid_types[0])
