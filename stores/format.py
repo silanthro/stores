@@ -119,12 +119,17 @@ def get_param_schema(param: inspect.Parameter, provider: ProviderFormat):
             param_schema["type"] = [param_schema["type"], "null"]
 
     if provider == ProviderFormat.GOOGLE_GEMINI:
-        # Check if multiple types are provided for a single argument
+        # Filter out "null" type
+        if type(param_schema["type"]) is list:
+            param_schema["type"] = [t for t in param_schema["type"] if t != "null"]
+            if len(param_schema["type"]) == 1:
+                param_schema["type"] = param_schema["type"][0]
+        # Check if there are still multiple types are provided for a single argument
         if type(param_schema["type"]) is list:
             logger.warning(
                 f"Gemini does not support a function argument with multiple types e.g. Union[str, int]; defaulting to first found non-null type: {param_schema['type'][0]}"
             )
-            param_schema["type"] = [t for t in param_schema["type"] if t != "null"][0]
+            param_schema["type"] = param_schema["type"][0]
         # Add nullable property for Gemini
         param_schema["nullable"] = param.default is not inspect.Parameter.empty
         if param_schema["type"] == "object":
