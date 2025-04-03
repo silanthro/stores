@@ -3,9 +3,11 @@ This example shows how to use stores with Anthropic's API.
 """
 
 import anthropic
+from dotenv import load_dotenv
 
 import stores
 
+load_dotenv()
 
 # Initialize Anthropic client
 client = anthropic.Anthropic()

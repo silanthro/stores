@@ -3,9 +3,11 @@ This example shows how to use stores with OpenAI's Agent SDK.
 """
 
 from agents import Agent, Runner, function_tool
+from dotenv import load_dotenv
 
 import stores
 
+load_dotenv()
 
 # Load the Hacker News tool index
 index = stores.Index(["silanthro/hackernews"])
@@ -13,7 +15,7 @@ index = stores.Index(["silanthro/hackernews"])
 # Set up the tools with Agents SDK's function_tool
 formatted_tools = [
     # OpenAI only supports ^[a-zA-Z0-9_-]{1,64}$
-    function_tool(name_override=fn.__name__.replace(".", "_"))(fn) 
+    function_tool(name_override=fn.__name__.replace(".", "_"))(fn)
     for fn in index.tools
 ]
 

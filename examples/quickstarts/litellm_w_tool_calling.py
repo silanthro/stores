@@ -8,7 +8,6 @@ from litellm import completion
 
 import stores
 
-
 # Load the Hacker News tool index
 index = stores.Index(["silanthro/hackernews"])
 

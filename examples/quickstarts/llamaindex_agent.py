@@ -2,12 +2,14 @@
 This example shows how to use stores with a LlamaIndex agent.
 """
 
+from dotenv import load_dotenv
 from llama_index.core.agent import AgentRunner
 from llama_index.core.tools import FunctionTool
 from llama_index.llms.google_genai import GoogleGenAI
 
 import stores
 
+load_dotenv()
 
 # Load the Hacker News tool index
 index = stores.Index(["silanthro/hackernews"])
