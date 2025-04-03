@@ -9,6 +9,7 @@ from typing import (
     Any,
     Callable,
     List,
+    Literal,
     Optional,
     Tuple,
     Union,
@@ -79,12 +80,45 @@ def _cast_bound_args(bound_args: inspect.BoundArguments):
     return bound_args
 
 
+# TODO: Support more nested types
+def _handle_non_string_literal(annotation: type):
+    origin = get_origin(annotation)
+    if origin is Literal:
+        if any([not isinstance(a, str) for a in get_args(annotation)]):
+            # TODO: Handle duplicates
+            literal_map = {str(a): a for a in get_args(annotation)}
+            new_annotation = Literal.__getitem__(tuple(literal_map.keys()))
+            return new_annotation, literal_map
+        else:
+            return annotation, {}
+    if origin in (list, List):
+        args = get_args(annotation)
+        new_annotation, literal_map = _handle_non_string_literal(args[0])
+        return list[new_annotation], {"item": literal_map}
+    return annotation, {}
+
+
+# TODO: Support more nested types
+def _undo_non_string_literal(annotation: type, value: Any, literal_map: dict):
+    origin = get_origin(annotation)
+    if origin is Literal:
+        return literal_map.get(value, value)
+    if origin in (list, List) and isinstance(value, (list, tuple)):
+        args = get_args(annotation)
+        return [
+            _undo_non_string_literal(args[0], v, literal_map["item"]) for v in value
+        ]
+    return value
+
+
 def wrap_tool(tool: Callable):
     """
     Wrap tool to make it compatible with LLM libraries
     - Gemini does not accept non-None default values
-    If there are any default args, we set default value to None
-    and inject the correct default value at runtime.
+        If there are any default args, we set default value to None
+        and inject the correct default value at runtime.
+    - Gemini does not accept non-string Literals
+        We convert non-string Literals to strings and reset this at runtime
     """
     if hasattr(tool, "_wrapped") and tool._wrapped:
         return tool
@@ -92,9 +126,22 @@ def wrap_tool(tool: Callable):
     # Retrieve default arguments
     original_signature = inspect.signature(tool)
     new_args = []
+    literal_maps = {}
     for arg in original_signature.parameters.values():
-        argtype = arg.annotation
-        if arg.default is Parameter.empty:
+        new_arg = arg
+
+        # Handle non-string Literals
+        argtype = new_arg.annotation
+        new_annotation, literal_map = _handle_non_string_literal(argtype)
+        literal_maps[arg.name] = literal_map
+        new_arg = new_arg.replace(
+            kind=Parameter.POSITIONAL_OR_KEYWORD,
+            annotation=new_annotation,
+        )
+
+        # Handle defaults
+        argtype = new_arg.annotation
+        if new_arg.default is Parameter.empty:
             # If it's annotated with Optional or Union[None, X]
             # remove the Optional tag since no default value is supplied
             if get_origin(argtype) == Union and NoneType in get_args(argtype):
@@ -102,30 +149,25 @@ def wrap_tool(tool: Callable):
                 new_annotation = argtype_args[0]
                 for child_argtype in argtype_args[1:]:
                     new_annotation = new_annotation | child_argtype
-                new_args.append(
-                    arg.replace(
-                        kind=Parameter.POSITIONAL_OR_KEYWORD,
-                        annotation=new_annotation,
-                    )
+                new_arg = new_arg.replace(
+                    kind=Parameter.POSITIONAL_OR_KEYWORD,
+                    annotation=new_annotation,
                 )
-            else:
-                new_args.append(arg)
         else:
             # Process args with default values: make sure type includes None
             new_annotation = argtype
             if new_annotation is Parameter.empty:
-                new_annotation = Optional[type(arg.default)]
+                new_annotation = Optional[type(new_arg.default)]
             if get_origin(new_annotation) != Union or NoneType not in get_args(
                 new_annotation
             ):
                 new_annotation = Optional[new_annotation]
-            new_args.append(
-                arg.replace(
-                    default=None,
-                    kind=Parameter.POSITIONAL_OR_KEYWORD,
-                    annotation=new_annotation,
-                )
+            new_arg = new_arg.replace(
+                default=None,
+                kind=Parameter.POSITIONAL_OR_KEYWORD,
+                annotation=new_annotation,
             )
+        new_args.append(new_arg)
     new_sig = original_signature.replace(parameters=new_args)
 
     if inspect.iscoroutinefunction(tool):
@@ -135,6 +177,13 @@ def wrap_tool(tool: Callable):
             bound_args = original_signature.bind(*args, **kwargs)
             bound_args.apply_defaults()
             _cast_bound_args(bound_args)
+            # Inject correct Literals
+            for k, v in bound_args.arguments.items():
+                if k in literal_maps:
+                    param = original_signature.parameters[k]
+                    bound_args.arguments[k] = _undo_non_string_literal(
+                        param.annotation, v, literal_maps[k]
+                    )
             return await tool(*bound_args.args, **bound_args.kwargs)
     else:
 
@@ -143,6 +192,13 @@ def wrap_tool(tool: Callable):
             bound_args = original_signature.bind(*args, **kwargs)
             bound_args.apply_defaults()
             _cast_bound_args(bound_args)
+            # Inject correct Literals
+            for k, v in bound_args.arguments.items():
+                if k in literal_maps:
+                    param = original_signature.parameters[k]
+                    bound_args.arguments[k] = _undo_non_string_literal(
+                        param.annotation, v, literal_maps[k]
+                    )
             return tool(*bound_args.args, **bound_args.kwargs)
 
     functools.update_wrapper(wrapper, tool)
