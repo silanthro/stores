@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 import stores
 
+# Load environment variables
 load_dotenv()
 
 # Load the Hacker News tool index

@@ -10,6 +10,7 @@ from google.genai import types
 
 import stores
 
+# Load environment variables
 load_dotenv()
 
 # Initialize Google Gemini client

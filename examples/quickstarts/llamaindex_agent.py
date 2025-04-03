@@ -9,6 +9,7 @@ from llama_index.llms.google_genai import GoogleGenAI
 
 import stores
 
+# Load environment variables
 load_dotenv()
 
 # Load the Hacker News tool index

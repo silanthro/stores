@@ -7,6 +7,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 import stores
 
+# Load environment variables
 load_dotenv()
 
 # Load the Hacker News tool index

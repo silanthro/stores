@@ -9,6 +9,7 @@ from openai import OpenAI
 
 import stores
 
+# Load environment variables
 load_dotenv()
 
 # Initialize OpenAI client

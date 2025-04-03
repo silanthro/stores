@@ -9,6 +9,7 @@ from langgraph.prebuilt import create_react_agent
 
 import stores
 
+# Load environment variables
 load_dotenv()
 
 # Load the Hacker News tool index
