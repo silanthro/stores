@@ -6,7 +6,6 @@ from typing import Callable
 from stores.indexes.base_index import BaseIndex
 from stores.indexes.local_index import LocalIndex
 from stores.indexes.remote_index import RemoteIndex
-from stores.tools import REPLY
 
 logging.basicConfig()
 logger = logging.getLogger("stores.index")
@@ -21,7 +20,6 @@ class Index(BaseIndex):
     ):
         self.env_var = env_var or {}
         tools = tools or []
-        tools.append(REPLY)
 
         _tools = []
         for tool in tools:

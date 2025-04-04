@@ -33,7 +33,6 @@ async def test_index(local_index_folder):
         "tools.typed_dict_input",
         "hello.world",
         "foo",
-        "REPLY",
     ]
 
     # Check that env_vars are set correctly
