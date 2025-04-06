@@ -1,6 +1,6 @@
 # stores
 
-Repository for useful tools, APIs and functions.
+Repository of Python functions and tools for LLMs
 
 ## Why we built Stores
 
