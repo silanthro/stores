@@ -95,6 +95,16 @@ def _handle_non_string_literal(annotation: type):
         args = get_args(annotation)
         new_annotation, literal_map = _handle_non_string_literal(args[0])
         return list[new_annotation], {"item": literal_map}
+    if origin is Union or origin is UnionType:
+        union_literal_maps = {}
+        argtype_args = [a for a in get_args(annotation) if a != NoneType]
+        new_union, literal_map = _handle_non_string_literal(argtype_args[0])
+        union_literal_maps[new_union.__name__] = literal_map
+        for child_argtype in argtype_args[1:]:
+            new_annotation, literal_map = _handle_non_string_literal(child_argtype)
+            new_union = new_union | new_annotation
+            union_literal_maps[new_annotation.__name__] = literal_map
+        return new_union, union_literal_maps
     return annotation, {}
 
 
@@ -108,6 +118,12 @@ def _undo_non_string_literal(annotation: type, value: Any, literal_map: dict):
         return [
             _undo_non_string_literal(args[0], v, literal_map["item"]) for v in value
         ]
+    if origin is Union or origin is UnionType:
+        for arg in get_args(annotation):
+            try:
+                return _undo_non_string_literal(arg, value, literal_map[arg.__name__])
+            except Exception:
+                pass
     return value
 
 
@@ -144,7 +160,8 @@ def wrap_tool(tool: Callable):
         if new_arg.default is Parameter.empty:
             # If it's annotated with Optional or Union[None, X]
             # remove the Optional tag since no default value is supplied
-            if get_origin(argtype) == Union and NoneType in get_args(argtype):
+            origin = get_origin(argtype)
+            if (origin in [Union, UnionType]) and NoneType in get_args(argtype):
                 argtype_args = [a for a in get_args(argtype) if a != NoneType]
                 new_annotation = argtype_args[0]
                 for child_argtype in argtype_args[1:]:
@@ -158,7 +175,8 @@ def wrap_tool(tool: Callable):
             new_annotation = argtype
             if new_annotation is Parameter.empty:
                 new_annotation = Optional[type(new_arg.default)]
-            if get_origin(new_annotation) != Union or NoneType not in get_args(
+            origin = get_origin(new_annotation)
+            if origin not in [Union, UnionType] or NoneType not in get_args(
                 new_annotation
             ):
                 new_annotation = Optional[new_annotation]
