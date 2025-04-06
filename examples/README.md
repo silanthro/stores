@@ -12,6 +12,7 @@ The example scripts are tool calling or agent workflows to generate a haiku abou
 | --------------------------------------------- | ------------------------------ |
 | OpenAI's Chat Completions API                 | `openai_chat_completions.py`   |
 | OpenAI's Response API                         | `openai_responses.py`          |
+| OpenAI's Agents SDK                           | `openai_agents.py`             |
 | Anthropic's Claude API                        | `anthropic_api.py`             |
 | Google Gemini API with automatic tool calling | `google_gemini_auto_call.py`   |
 | Google Gemini API with manual tool calling    | `google_gemini_manual_call.py` |
@@ -39,6 +40,9 @@ pip install -e ".[google]"
 
 # For OpenAI
 pip install -e ".[openai]"
+
+# For OpenAI Agents
+pip install -e ".[openai-agent]"
 
 # For LangChain
 pip install -e ".[langchain]"

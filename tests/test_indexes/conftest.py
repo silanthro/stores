@@ -135,7 +135,7 @@ async def union_tool_w_none(bar: Union[None, str, int]):
         },
         {
             "function": union_tool,
-            "signature": "(bar: Union[str, int])",
+            "signature": "(bar: str | int)",
             "params": [
                 {
                     "name": "bar",
