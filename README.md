@@ -2,57 +2,47 @@
 
 Repository for useful tools, APIs and functions.
 
-Usage:
+## Why we built Stores
 
-```py
+Just as tool use is often cited as a key development in human civilization, we believe that tool use represents a major transition in AI development.
+
+**The aim of Stores is to make it super simple to build LLM Agents that use tools.**
+
+There are two main elements:
+1. A public repository of [tools](https://stores-tools.vercel.app) that anyone can contribute to
+2. A [Python library](https://github.com/silanthro/stores) that handles tool installation and formatting
+
+## Design principles
+
+- **Open-source**: Each set of tools in the Stores collection is a public git repository. In the event the Stores database is no longer operational, the library and tools will still work as long as the git repositories exist.
+- **Isolation**: Tools are isolated in their own virtual environments. This makes it trivial to manage tools with conflicting dependencies and reduces unnecessary access to sensitive environment variables.
+- **Framework compatibility**: In order to pass information about tools, LLM providers often require different formats that can make it cumbersome to switch between providers. Stores makes it easy to output the required formats across providers.
+
+## Usage
+
+```sh
+pip install stores
+```
+
+Or if you are using `uv`:
+
+```sh
+uv add stores
+```
+
+Then load one of the available indexes and use it with your favorite LLM package.
+
+```python {6, 11}
+import anthropic
 import stores
-from litellm import completion
 
-request = "Send an email to email@example.com containing a poem"
+client = anthropic.Anthropic()
 
-index = stores.Index(
-    ["./custom_tools"],
-    env_vars={
-        "./custom_tools": {
-            "GMAIL_ADDRESS": "<EMAIL>",
-            "GMAIL_PASSWORD": "<PASSWORD>",
-        },
-    },
+index = stores.Index(["silanthro/hackernews"])
+
+response = client.messages.create(
+    model=model,
+    messages=messages,
+    tools=index.format_tools("anthropic"),
 )
-
-response = completion(
-    model="gemini/gemini-2.0-flash-001",
-    messages=[{
-        "role": "user",
-        "content": stores.format_query(request, index.tools),
-    }],
-).choices[0].message.content
-
-print(response)
-
-index.parse_and_execute(response)
 ```
-
-## tools.toml
-
-In a repository or folder, tools are declared via a `tools.toml` file.
-
-At the moment this file simply declares a list of tools/functions that can be accessed by the LLM.
-
-```toml
-[index]
-
-# An optional description
-description = "Lorem ipsum"
-
-# A list of tools declared via the module and function name
-tools = [
-    "foo.bar",
-]
-```
-
-We are considering adding useful attributes such as required environment variables and dependencies.
-
-## TODO
-
-- Support rate limit of tools and other rules to prevent LLM abuse
