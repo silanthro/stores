@@ -10,7 +10,9 @@ Just as tool use is often cited as a key development in human civilization, we b
 
 There are two main elements:
 1. A public repository of [tools](https://stores-tools.vercel.app) that anyone can contribute to
-2. A [Python library](https://github.com/silanthro/stores) that handles tool installation and formatting
+2. This Python library that handles tool installation and formatting
+
+For more details, check out the [documentation](https://stores-tools.vercel.app/docs).
 
 ## Design principles
 
