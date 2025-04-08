@@ -1,5 +1,4 @@
 import asyncio
-import functools
 import inspect
 import logging
 import re
@@ -17,6 +16,8 @@ from typing import (
     get_origin,
     get_type_hints,
 )
+
+from makefun import create_function
 
 from stores.format import ProviderFormat, format_tools
 from stores.parse import llm_parse_json
@@ -209,8 +210,15 @@ def wrap_tool(tool: Callable):
             # Inject default values within wrapper
             bound_args = original_signature.bind(*args, **kwargs)
             bound_args.apply_defaults()
-            _cast_bound_args(bound_args)
             # Inject correct Literals
+            for k, v in bound_args.arguments.items():
+                if (
+                    v is None
+                    and original_signature.parameters[k].default is not Parameter.empty
+                ):
+                    bound_args.arguments[k] = original_signature.parameters[k].default
+
+            _cast_bound_args(bound_args)
             for k, v in bound_args.arguments.items():
                 if k in literal_maps:
                     param = original_signature.parameters[k]
@@ -219,11 +227,17 @@ def wrap_tool(tool: Callable):
                     )
             return tool(*bound_args.args, **bound_args.kwargs)
 
-    functools.update_wrapper(wrapper, tool)
-    wrapper.__signature__ = new_sig
-    wrapper._wrapped = True
+    wrapped = create_function(
+        new_sig,
+        wrapper,
+        qualname=tool.__name__,
+        doc=inspect.getdoc(tool),
+    )
 
-    return wrapper
+    wrapped.__name__ = tool.__name__
+    wrapped._wrapped = True
+
+    return wrapped
 
 
 class BaseIndex:
