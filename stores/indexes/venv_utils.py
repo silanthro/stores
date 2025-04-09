@@ -114,19 +114,25 @@ import pickle, sys, traceback, inspect, enum
 from typing import Any, Dict, List, Literal, Tuple, Union, get_args, get_origin, get_type_hints
 import types as T
 
+# Support ForwardRef
+CUSTOM_TYPES = []
 
 def extract_type_info(typ):
+    if typ.__name__ in CUSTOM_TYPES:
+        return typ.__name__
     origin = get_origin(typ)
     args = list(get_args(typ))
     if origin is Literal:
         return {{"type": "Literal", "values": args}}
     elif inspect.isclass(typ) and issubclass(typ, enum.Enum):
+        CUSTOM_TYPES.append(typ.__name__)
         return {{
             "type": "Enum",
             "type_name": typ.__name__,
             "values": {{v.name: v.value for v in typ}},
         }}
     elif isinstance(typ, type) and typ.__class__.__name__ == "_TypedDictMeta":
+        CUSTOM_TYPES.append(typ.__name__)
         hints = get_type_hints(typ)
         return {{
             "type": "TypedDict",
@@ -205,7 +211,10 @@ except Exception as e:
         raise RuntimeError(f"Error loading tool {tool_id}:\n{response['error']}")
 
 
-def parse_param_type(param_info: dict):
+def parse_param_type(param_info: dict | str):
+    # Support ForwardRef
+    if isinstance(param_info, str):
+        return param_info
     param_type = param_info["type"]
     if not isinstance(param_type, str):
         return param_type
