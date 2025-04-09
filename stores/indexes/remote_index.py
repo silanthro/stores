@@ -1,5 +1,6 @@
 import json
 import logging
+import shutil
 import venv
 from pathlib import Path
 
@@ -19,6 +20,10 @@ CACHE_DIR = Path(".tools")
 INDEX_LOOKUP_URL = (
     "https://mnryl5tkkol3yitc3w2rupqbae0ovnej.lambda-url.us-east-1.on.aws/"
 )
+
+
+def clear_cache():
+    shutil.rmtree(CACHE_DIR)
 
 
 def lookup_index(index_id: str, index_version: str | None = None):
@@ -44,6 +49,7 @@ class RemoteIndex(BaseIndex):
         self.index_folder = CACHE_DIR / self.index_id
         self.env_var = env_var or {}
         if not self.index_folder.exists():
+            logger.info(f"Installing {index_id}...")
             commit_like = None
             if ":" in index_id:
                 index_id, commit_like = index_id.split(":")
