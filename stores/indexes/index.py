@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 from stores.indexes.base_index import BaseIndex
 from stores.indexes.local_index import LocalIndex
@@ -17,6 +17,8 @@ class Index(BaseIndex):
         self,
         tools: list[Callable, os.PathLike] | None = None,
         env_var: dict[str, dict] | None = None,
+        cache_dir: Optional[os.PathLike] = None,
+        reset_cache=False,
     ):
         self.env_var = env_var or {}
         tools = tools or []
@@ -38,7 +40,10 @@ class Index(BaseIndex):
                     # Load RemoteIndex
                     try:
                         loaded_index = RemoteIndex(
-                            index_name, env_var=self.env_var.get(index_name)
+                            index_name,
+                            env_var=self.env_var.get(index_name),
+                            cache_dir=cache_dir,
+                            reset_cache=reset_cache,
                         )
                     except Exception:
                         logger.warning(

@@ -2,7 +2,9 @@ import json
 import logging
 import shutil
 import venv
+from os import PathLike
 from pathlib import Path
+from typing import Optional
 
 import requests
 from git import Repo
@@ -22,7 +24,7 @@ INDEX_LOOKUP_URL = (
 )
 
 
-def clear_cache():
+def clear_default_cache():
     shutil.rmtree(CACHE_DIR)
 
 
@@ -44,9 +46,21 @@ def lookup_index(index_id: str, index_version: str | None = None):
 
 
 class RemoteIndex(BaseIndex):
-    def __init__(self, index_id: str, env_var: dict | None = None):
+    def __init__(
+        self,
+        index_id: str,
+        env_var: dict | None = None,
+        cache_dir: Optional[PathLike] = None,
+        reset_cache=False,
+    ):
         self.index_id = index_id
-        self.index_folder = CACHE_DIR / self.index_id
+        if cache_dir is None:
+            cache_dir = CACHE_DIR
+        else:
+            cache_dir = Path(cache_dir)
+        if reset_cache:
+            shutil.rmtree(cache_dir)
+        self.index_folder = cache_dir / self.index_id
         self.env_var = env_var or {}
         if not self.index_folder.exists():
             logger.info(f"Installing {index_id}...")
