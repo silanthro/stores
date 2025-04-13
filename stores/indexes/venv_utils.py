@@ -115,44 +115,49 @@ from typing import Any, Dict, List, Literal, Tuple, Union, get_args, get_origin,
 import types as T
 
 
-def extract_type_info(typ):
+def extract_type_info(typ, custom_types: list[str] | None = None):
+    custom_types = custom_types or []
+    if hasattr(typ, "__name__") and typ.__name__ in custom_types:
+        return typ.__name__
     origin = get_origin(typ)
     args = list(get_args(typ))
     if origin is Literal:
         return {{"type": "Literal", "values": args}}
     elif inspect.isclass(typ) and issubclass(typ, enum.Enum):
+        custom_types.append(typ.__name__)
         return {{
             "type": "Enum",
             "type_name": typ.__name__,
             "values": {{v.name: v.value for v in typ}},
         }}
     elif isinstance(typ, type) and typ.__class__.__name__ == "_TypedDictMeta":
+        custom_types.append(typ.__name__)
         hints = get_type_hints(typ)
         return {{
             "type": "TypedDict",
             "type_name": typ.__name__,
-            "fields": {{k: extract_type_info(v) for k, v in hints.items()}}
+            "fields": {{k: extract_type_info(v, custom_types) for k, v in hints.items()}}
         }}
     elif origin in (list, List) or typ is list:
         return {{
             "type": "List",
-            "item_type": extract_type_info(args[0]) if args else {{"type": Any}}
+            "item_type": extract_type_info(args[0], custom_types) if args else {{"type": Any}}
         }}
     elif origin in (dict, Dict) or typ is dict:
         return {{
             "type": "Dict",
-            "key_type": extract_type_info(args[0]) if args else {{"type": Any}},
-            "value_type": extract_type_info(args[1]) if len(args) > 1 else {{"type": Any}}
+            "key_type": extract_type_info(args[0], custom_types) if args else {{"type": Any}},
+            "value_type": extract_type_info(args[1], custom_types) if len(args) > 1 else {{"type": Any}}
         }}
     elif origin in (tuple, Tuple) or typ is tuple:
         return {{
             "type": "Tuple",
-            "item_types": [extract_type_info(arg) for arg in args] if args else [{{"type": Any}}]
+            "item_types": [extract_type_info(arg, custom_types) for arg in args] if args else [{{"type": Any}}]
         }}
     elif origin is Union or origin is T.UnionType:
         return {{
             "type": "Union",
-            "options": [extract_type_info(arg) for arg in args]
+            "options": [extract_type_info(arg, custom_types) for arg in args]
         }}
     else:
         return {{"type": typ}}
@@ -205,33 +210,39 @@ except Exception as e:
         raise RuntimeError(f"Error loading tool {tool_id}:\n{response['error']}")
 
 
-def parse_param_type(param_info: dict):
+def parse_param_type(param_info: dict, custom_types: list[str] | None = None):
+    custom_types = custom_types or []
+    # Support ForwardRef
     param_type = param_info["type"]
+    if param_type in custom_types:
+        return param_type
     if not isinstance(param_type, str):
         return param_type
     if param_type == "Literal":
         return Literal.__getitem__(tuple(param_info["values"]))
     elif param_type == "Enum":
+        custom_types.append(param_info["type_name"])
         return Enum(param_info["type_name"], param_info["values"])
     elif param_type == "TypedDict":
+        custom_types.append(param_info["type_name"])
         properties = {}
         for k, v in param_info["fields"].items():
-            properties[k] = parse_param_type(v)
+            properties[k] = parse_param_type(v, custom_types)
         return TypedDict(param_info["type_name"], properties)
     elif param_type == "List":
-        return list[parse_param_type(param_info["item_type"])]
+        return list[parse_param_type(param_info["item_type"], custom_types)]
     elif param_type == "Dict":
         return Dict[
-            parse_param_type(param_info["key_type"]),
-            parse_param_type(param_info["value_type"]),
+            parse_param_type(param_info["key_type"], custom_types),
+            parse_param_type(param_info["value_type"], custom_types),
         ]
     elif param_type == "Tuple":
         return Tuple.__getitem__(
-            tuple([parse_param_type(i) for i in param_info["item_types"]])
+            tuple([parse_param_type(i, custom_types) for i in param_info["item_types"]])
         )
     elif param_type == "Union":
         return Union.__getitem__(
-            tuple([parse_param_type(i) for i in param_info["options"]])
+            tuple([parse_param_type(i, custom_types) for i in param_info["options"]])
         )
     else:
         raise TypeError(f"Invalid param type {param_type} in param info {param_info}")
