@@ -40,3 +40,12 @@ async def test_remote_index():
         )
     # Clean up index
     shutil.rmtree(stores.indexes.remote_index.CACHE_DIR / "silanthro/send-gmail:0.2.0")
+
+
+async def test_remote_index_2():
+    # Check that env_vars are set correctly
+    stores.indexes.RemoteIndex(
+        "silanthro/filesystem:0.2.0",
+        env_var={"ALLOWED_DIR": "./test"},
+    )
+    shutil.rmtree(stores.indexes.remote_index.CACHE_DIR / "silanthro/filesystem:0.2.0")

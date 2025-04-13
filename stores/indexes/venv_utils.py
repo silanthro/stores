@@ -93,6 +93,7 @@ def init_venv_tools(index_folder: os.PathLike, env_var: dict | None = None):
             tool_id=tool_id,
             index_folder=index_folder,
             venv=VENV_NAME,
+            env_var=env_var,
         )
         tool = parse_tool_signature(
             signature_dict=tool_sig,
@@ -105,9 +106,15 @@ def init_venv_tools(index_folder: os.PathLike, env_var: dict | None = None):
 
 
 # TODO: Sanitize tool_id, args, and kwargs
-def get_tool_signature(tool_id: str, index_folder: os.PathLike, venv: str = VENV_NAME):
+def get_tool_signature(
+    tool_id: str,
+    index_folder: os.PathLike,
+    venv: str = VENV_NAME,
+    env_var: dict | None = None,
+):
     module_name = ".".join(tool_id.split(".")[:-1])
     tool_name = tool_id.split(".")[-1]
+    env_var = env_var or {}
 
     runner = f"""
 import pickle, sys, traceback, inspect, enum
@@ -197,6 +204,7 @@ except Exception as e:
         [f"{venv}/bin/python", "-c", runner],
         capture_output=True,
         cwd=index_folder,
+        env=env_var,
     )
     try:
         response = pickle.loads(result.stdout)
