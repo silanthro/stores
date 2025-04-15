@@ -1,6 +1,7 @@
 import json
 import logging
 import shutil
+import subprocess
 import venv
 from os import PathLike
 from pathlib import Path
@@ -52,6 +53,7 @@ class RemoteIndex(BaseIndex):
         env_var: dict | None = None,
         cache_dir: Optional[PathLike] = None,
         reset_cache=False,
+        sys_executable: str | None = None,
     ):
         self.index_id = index_id
         if cache_dir is None:
@@ -89,7 +91,12 @@ class RemoteIndex(BaseIndex):
         # Create venv and install deps
         self.venv = self.index_folder / VENV_NAME
         if not self.venv.exists():
-            venv.create(self.venv, symlinks=True, with_pip=True, upgrade_deps=True)
+            if sys_executable:
+                subprocess.run(
+                    [sys_executable, "-m", "venv", str(self.venv)], check=True
+                )
+            else:
+                venv.create(self.venv, symlinks=True, with_pip=True, upgrade_deps=True)
         install_venv_deps(self.index_folder)
         # Initialize tools
         tools = init_venv_tools(self.index_folder, self.env_var)

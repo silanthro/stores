@@ -1,6 +1,7 @@
 import importlib
 import logging
 import os
+import subprocess
 import sys
 import venv
 from pathlib import Path
@@ -25,6 +26,7 @@ class LocalIndex(BaseIndex):
         index_folder: os.PathLike,
         create_venv: bool = False,
         env_var: dict | None = None,
+        sys_executable: str | None = None,
     ):
         self.index_folder = Path(index_folder)
         self.env_var = env_var or {}
@@ -38,7 +40,14 @@ class LocalIndex(BaseIndex):
             # Create venv and install deps
             self.venv = self.index_folder / VENV_NAME
             if not self.venv.exists():
-                venv.create(self.venv, symlinks=True, with_pip=True, upgrade_deps=True)
+                if sys_executable:
+                    subprocess.run(
+                        [sys_executable, "-m", "venv", str(self.venv)], check=True
+                    )
+                else:
+                    venv.create(
+                        self.venv, symlinks=True, with_pip=True, upgrade_deps=True
+                    )
             install_venv_deps(self.index_folder)
             # Initialize tools
             tools = init_venv_tools(self.index_folder, self.env_var)

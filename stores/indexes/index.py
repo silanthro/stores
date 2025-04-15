@@ -19,6 +19,7 @@ class Index(BaseIndex):
         env_var: dict[str, dict] | None = None,
         cache_dir: Optional[os.PathLike] = None,
         reset_cache=False,
+        sys_executable: str | None = None,
     ):
         self.env_var = env_var or {}
         tools = tools or []
@@ -44,6 +45,7 @@ class Index(BaseIndex):
                             env_var=self.env_var.get(index_name),
                             cache_dir=cache_dir,
                             reset_cache=reset_cache,
+                            sys_executable=sys_executable,
                         )
                     except Exception:
                         logger.warning(
