@@ -36,7 +36,7 @@ SUPPORTED_CONFIGS = [
 
 
 def get_pip_command(venv_path: os.PathLike, config_file: str) -> list[str]:
-    venv_path = Path(venv_path)
+    venv_path = Path(venv_path).resolve()
     if os.name == "nt":
         pip_path = venv_path / "Scripts" / "pip.exe"
     else:
@@ -48,6 +48,15 @@ def get_pip_command(venv_path: os.PathLike, config_file: str) -> list[str]:
         return [str(pip_path), "install", "-r", "requirements.txt"]
     else:
         raise ValueError(f"Unsupported config file: {config_file}")
+
+
+def get_python_command(venv_path: os.PathLike) -> list[str]:
+    venv_path = Path(venv_path).resolve()
+    if os.name == "nt":
+        executable = venv_path / "Scripts" / "python.exe"
+    else:
+        executable = venv_path / "bin" / "python"
+    return str(executable)
 
 
 def has_installed(config_path: os.PathLike):
@@ -84,7 +93,7 @@ def install_venv_deps(index_folder: os.PathLike):
             # Check if already installed
             if has_installed(config_path):
                 return "Already installed"
-            pip_command = get_pip_command(VENV_NAME, config_file)
+            pip_command = get_pip_command(index_folder / VENV_NAME, config_file)
             subprocess.check_call(
                 pip_command,
                 cwd=index_folder,
@@ -216,11 +225,13 @@ except Exception as e:
     err = traceback.format_exc()
     pickle.dump({{"ok": False, "error": err}}, sys.stdout.buffer)
 """
+    logger.info([get_python_command(Path(index_folder) / venv), "-c"])
+    logger.info(env_var)
     result = subprocess.run(
-        [f"{venv}/bin/python", "-c", runner],
+        [get_python_command(Path(index_folder) / venv), "-c", runner],
         capture_output=True,
         cwd=index_folder,
-        env=env_var,
+        env=env_var or None,
     )
     try:
         response = pickle.loads(result.stdout)
@@ -396,11 +407,11 @@ sock = socket.create_connection(("localhost", {port}))
 sock.sendall(response.encode("utf-8"))
 sock.close()
 """
-    subprocess.run(
-        [f"{index_folder}/{venv}/bin/python", "-c", runner],
+    result = subprocess.run(
+        [get_python_command(Path(index_folder) / venv), "-c", runner],
         input=payload,
         capture_output=True,
-        env=env_var,
+        env=env_var or None,
     )
 
     t.join()
