@@ -28,11 +28,26 @@ logger.setLevel(logging.INFO)
 HASH_FILE = ".deps_hash"
 
 
-SUPPORTED_DEP_CONFIGS = {
-    "pyproject.toml": f"{VENV_NAME}/bin/pip install .",
-    "setup.py": f"{VENV_NAME}/bin/pip install .",
-    "requirements.txt": f"{VENV_NAME}/bin/pip install -r requirements.txt",
-}
+SUPPORTED_CONFIGS = [
+    "pyproject.toml",
+    "setup.py",
+    "requirements.txt",
+]
+
+
+def get_pip_command(venv_path: os.PathLike, config_file: str) -> list[str]:
+    venv_path = Path(venv_path)
+    if os.name == "nt":
+        pip_path = venv_path / "Scripts" / "pip.exe"
+    else:
+        pip_path = venv_path / "bin" / "pip"
+
+    if config_file in {"pyproject.toml", "setup.py"}:
+        return [str(pip_path), "install", "."]
+    elif config_file == "requirements.txt":
+        return [str(pip_path), "install", "-r", "requirements.txt"]
+    else:
+        raise ValueError(f"Unsupported config file: {config_file}")
 
 
 def has_installed(config_path: os.PathLike):
@@ -63,18 +78,19 @@ def write_hash(config_path: os.PathLike):
 def install_venv_deps(index_folder: os.PathLike):
     index_folder = Path(index_folder)
 
-    for config_file, install_cmd in SUPPORTED_DEP_CONFIGS.items():
+    for config_file in SUPPORTED_CONFIGS:
         config_path = index_folder / config_file
         if config_path.exists():
             # Check if already installed
             if has_installed(config_path):
                 return "Already installed"
+            pip_command = get_pip_command(VENV_NAME, config_file)
             subprocess.check_call(
-                install_cmd.split(),
+                pip_command,
                 cwd=index_folder,
             )
             write_hash(config_path)
-            message = f"Installed with {index_folder}/{install_cmd}"
+            message = f'Installed with "{" ".join(pip_command)}"'
             logger.info(message)
             return message
 
