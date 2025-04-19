@@ -225,8 +225,6 @@ except Exception as e:
     err = traceback.format_exc()
     pickle.dump({{"ok": False, "error": err}}, sys.stdout.buffer)
 """
-    logger.info([get_python_command(Path(index_folder) / venv), "-c"])
-    logger.info(env_var)
     result = subprocess.run(
         [get_python_command(Path(index_folder) / venv), "-c", runner],
         capture_output=True,
