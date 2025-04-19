@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import inspect
 import json
@@ -308,7 +309,7 @@ def parse_tool_signature(
 
         async def func_handler(*args, **kwargs):
             # TODO: Make this truly async
-            for value in run_remote_tool(
+            async for value in run_remote_tool(
                 tool_id=signature_dict["tool_id"],
                 index_folder=index_folder,
                 args=args,
@@ -410,7 +411,7 @@ def run_remote_tool(
 
     result_data = {}
 
-    def handle_connection(stream_mode: bool = False):
+    def handle_connection_sync():
         conn, _ = listener.accept()
         with conn:
             buffer = ""
@@ -425,24 +426,43 @@ def run_remote_tool(
                         continue
                     msg = json.loads(line)
                     if msg.get("ok") and "stream" in msg:
-                        if stream_mode:
-                            yield msg["stream"]
-                        else:
-                            result_data.setdefault("stream", []).append(msg["stream"])
+                        result_data.setdefault("stream", []).append(msg["stream"])
                     elif msg.get("ok") and "result" in msg:
                         result_data["result"] = msg["result"]
                     elif "error" in msg:
                         result_data["error"] = msg["error"]
                     elif msg.get("done"):
-                        if stream_mode:
-                            break
-                        else:
-                            return
+                        return
+
+    async def handle_connection_async():
+        loop = asyncio.get_running_loop()
+        conn, _ = await loop.sock_accept(listener)
+        conn.setblocking(False)
+        buffer = ""
+        try:
+            while True:
+                chunk = await loop.sock_recv(conn, 4096)
+                if not chunk:
+                    break
+                buffer += chunk.decode("utf-8")
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    if not line.strip():
+                        continue
+                    msg = json.loads(line)
+                    if msg.get("ok") and "stream" in msg:
+                        yield msg["stream"]
+                    elif msg.get("ok") and "result" in msg:
+                        yield msg["result"]
+                    elif "error" in msg:
+                        raise RuntimeError(f"Subprocess error:\n{msg['error']}")
+                    elif msg.get("done"):
+                        return
+        finally:
+            conn.close()
 
     if not stream:
-        thread = threading.Thread(
-            target=lambda: list(handle_connection(stream_mode=False))
-        )
+        thread = threading.Thread(target=lambda: list(handle_connection_sync()))
         thread.start()
 
     runner = f"""
@@ -493,12 +513,16 @@ finally:
     except:
         pass
 """
-    subprocess.run(
+
+    proc = subprocess.Popen(
         [get_python_command(Path(index_folder) / venv), "-c", runner],
-        input=payload,
-        capture_output=True,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
         env=env_var or None,
     )
+    proc.stdin.write(payload)
+    proc.stdin.close()
 
     if not stream:
         thread.join()
@@ -512,4 +536,4 @@ finally:
         else:
             raise RuntimeError("Subprocess completed without returning data.")
     else:
-        return handle_connection(stream_mode=True)
+        return handle_connection_async()
