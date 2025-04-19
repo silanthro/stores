@@ -415,13 +415,13 @@ sys.path.insert(0, "{index_folder}")
 def send(sock, payload):
     sock.sendall((json.dumps(payload) + "\\n").encode("utf-8"))
 
+sock = socket.create_connection(("localhost", {port}))
+
 try:
     from {module_name} import {tool_name}
     params = json.load(sys.stdin)
     args = params.get("args", [])
     kwargs = params.get("kwargs", {{}})
-
-    sock = socket.create_connection(("localhost", {port}))
 
     func = {tool_name}
 
@@ -447,7 +447,6 @@ try:
 except Exception as e:
     err = traceback.format_exc()
     try:
-        sock = socket.create_connection(("localhost", {port}))
         send(sock, {{"ok": False, "error": err}})
     except:
         pass
