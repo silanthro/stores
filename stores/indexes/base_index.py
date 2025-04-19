@@ -134,6 +134,12 @@ def _preprocess_args(
     # Inject default values within wrapper
     bound_args = original_signature.bind(*args, **kwargs)
     bound_args.apply_defaults()
+    for k, v in bound_args.arguments.items():
+        if (
+            v is None
+            and original_signature.parameters[k].default is not Parameter.empty
+        ):
+            bound_args.arguments[k] = original_signature.parameters[k].default
     _cast_bound_args(bound_args)
     # Inject correct Literals
     for k, v in bound_args.arguments.items():
