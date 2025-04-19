@@ -128,6 +128,29 @@ def _undo_non_string_literal(annotation: type, value: Any, literal_map: dict):
     return value
 
 
+def _preprocess_args(
+    original_signature: inspect.Signature, literal_maps: dict, args: list, kwargs: dict
+):
+    # Inject default values within wrapper
+    bound_args = original_signature.bind(*args, **kwargs)
+    bound_args.apply_defaults()
+    for k, v in bound_args.arguments.items():
+        if (
+            v is None
+            and original_signature.parameters[k].default is not Parameter.empty
+        ):
+            bound_args.arguments[k] = original_signature.parameters[k].default
+    _cast_bound_args(bound_args)
+    # Inject correct Literals
+    for k, v in bound_args.arguments.items():
+        if k in literal_maps:
+            param = original_signature.parameters[k]
+            bound_args.arguments[k] = _undo_non_string_literal(
+                param.annotation, v, literal_maps[k]
+            )
+    return bound_args
+
+
 def wrap_tool(tool: Callable):
     """
     Wrap tool to make it compatible with LLM libraries
@@ -189,42 +212,37 @@ def wrap_tool(tool: Callable):
         new_args.append(new_arg)
     new_sig = original_signature.replace(parameters=new_args)
 
-    if inspect.iscoroutinefunction(tool):
+    if inspect.isasyncgenfunction(tool):
 
         async def wrapper(*args, **kwargs):
-            # Inject default values within wrapper
-            bound_args = original_signature.bind(*args, **kwargs)
-            bound_args.apply_defaults()
-            _cast_bound_args(bound_args)
-            # Inject correct Literals
-            for k, v in bound_args.arguments.items():
-                if k in literal_maps:
-                    param = original_signature.parameters[k]
-                    bound_args.arguments[k] = _undo_non_string_literal(
-                        param.annotation, v, literal_maps[k]
-                    )
+            bound_args = _preprocess_args(
+                original_signature, literal_maps, args, kwargs
+            )
+            async for value in tool(*bound_args.args, **bound_args.kwargs):
+                yield value
+
+    elif inspect.isgeneratorfunction(tool):
+
+        def wrapper(*args, **kwargs):
+            bound_args = _preprocess_args(
+                original_signature, literal_maps, args, kwargs
+            )
+            for value in tool(*bound_args.args, **bound_args.kwargs):
+                yield value
+
+    elif inspect.iscoroutinefunction(tool):
+
+        async def wrapper(*args, **kwargs):
+            bound_args = _preprocess_args(
+                original_signature, literal_maps, args, kwargs
+            )
             return await tool(*bound_args.args, **bound_args.kwargs)
     else:
 
         def wrapper(*args, **kwargs):
-            # Inject default values within wrapper
-            bound_args = original_signature.bind(*args, **kwargs)
-            bound_args.apply_defaults()
-            # Inject correct Literals
-            for k, v in bound_args.arguments.items():
-                if (
-                    v is None
-                    and original_signature.parameters[k].default is not Parameter.empty
-                ):
-                    bound_args.arguments[k] = original_signature.parameters[k].default
-
-            _cast_bound_args(bound_args)
-            for k, v in bound_args.arguments.items():
-                if k in literal_maps:
-                    param = original_signature.parameters[k]
-                    bound_args.arguments[k] = _undo_non_string_literal(
-                        param.annotation, v, literal_maps[k]
-                    )
+            bound_args = _preprocess_args(
+                original_signature, literal_maps, args, kwargs
+            )
             return tool(*bound_args.args, **bound_args.kwargs)
 
     wrapped = create_function(
@@ -249,14 +267,7 @@ class BaseIndex:
     def tools_dict(self):
         return {tool.__name__: tool for tool in self.tools}
 
-    def execute(self, toolname: str, kwargs: dict | None = None):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        return loop.run_until_complete(self.async_execute(toolname, kwargs))
-
-    async def async_execute(self, toolname: str, kwargs: dict | None = None):
-        kwargs = kwargs or {}
-
+    def _get_tool(self, toolname: str):
         # Use regex since we need to match cases where we perform
         # substitutions such as replace(".", "-")
         pattern = re.compile(":?" + re.sub("-|\\.", "(-|\\.)", toolname) + "$")
@@ -272,11 +283,124 @@ class BaseIndex:
         else:
             toolname = matching_tools[0]
 
-        tool = self.tools_dict[toolname]
-        if inspect.iscoroutinefunction(tool):
-            return await tool(**kwargs)
+        return self.tools_dict[toolname]
+
+    def execute(self, toolname: str, kwargs: dict | None = None, collect_results=False):
+        tool_fn = self._get_tool(toolname)
+        kwargs = kwargs or {}
+        if inspect.isasyncgenfunction(tool_fn):
+            # Handle async generator
+
+            async def collect():
+                results = []
+                async for value in tool_fn(**kwargs):
+                    results.append(value)
+                if collect_results:
+                    return results
+                else:
+                    return results[-1]
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            return loop.run_until_complete(collect())
+        elif inspect.isgeneratorfunction(tool_fn):
+            # Handle sync generator
+            results = []
+            for value in tool_fn(**kwargs):
+                results.append(value)
+            if collect_results:
+                return results
+            else:
+                return results[-1]
+        elif inspect.iscoroutinefunction(tool_fn):
+            # Handle async
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            return loop.run_until_complete(tool_fn(**kwargs))
         else:
-            return tool(**kwargs)
+            # Handle sync
+            return tool_fn(**kwargs)
+
+    async def aexecute(
+        self, toolname: str, kwargs: dict | None = None, collect_results=False
+    ):
+        tool_fn = self._get_tool(toolname)
+        kwargs = kwargs or {}
+        if inspect.isasyncgenfunction(tool_fn):
+            # Handle async generator
+            results = []
+            async for value in tool_fn(**kwargs):
+                results.append(value)
+            if collect_results:
+                return results
+            else:
+                return results[-1]
+        elif inspect.isgeneratorfunction(tool_fn):
+            # Handle sync generator
+            results = []
+            for value in tool_fn(**kwargs):
+                results.append(value)
+            if collect_results:
+                return results
+            else:
+                return results[-1]
+        elif inspect.iscoroutinefunction(tool_fn):
+            # Handle async
+            return await tool_fn(**kwargs)
+        else:
+            # Handle sync
+            return tool_fn(**kwargs)
+
+    def stream_execute(self, toolname: str, kwargs: dict | None = None):
+        tool_fn = self._get_tool(toolname)
+        kwargs = kwargs or {}
+        if inspect.isasyncgenfunction(tool_fn):
+            # Handle async generator
+
+            async def collect():
+                async for value in tool_fn(**kwargs):
+                    yield value
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            agen = collect()
+            try:
+                while True:
+                    yield loop.run_until_complete(agen.__anext__())
+            except StopAsyncIteration:
+                pass
+            finally:
+                loop.close()
+        elif inspect.isgeneratorfunction(tool_fn):
+            # Handle sync generator
+            for value in tool_fn(**kwargs):
+                yield value
+        elif inspect.iscoroutinefunction(tool_fn):
+            # Handle async
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            yield loop.run_until_complete(tool_fn(**kwargs))
+        else:
+            # Handle sync
+            yield tool_fn(**kwargs)
+
+    async def astream_execute(self, toolname: str, kwargs: dict | None = None):
+        tool_fn = self._get_tool(toolname)
+        kwargs = kwargs or {}
+        if inspect.isasyncgenfunction(tool_fn):
+            # Handle async generator
+            async for value in tool_fn(**kwargs):
+                yield value
+        elif inspect.isgeneratorfunction(tool_fn):
+            # Handle sync generator
+            for value in tool_fn(**kwargs):
+                yield value
+        elif inspect.iscoroutinefunction(tool_fn):
+            # Handle async
+            yield await tool_fn(**kwargs)
+        else:
+            # Handle sync
+            yield tool_fn(**kwargs)
 
     def parse_and_execute(self, msg: str):
         toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
@@ -284,9 +408,18 @@ class BaseIndex:
 
     async def async_parse_and_execute(self, msg: str):
         toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
-        return await self.async_execute(
+        return await self.aexecute(toolcall.get("toolname"), toolcall.get("kwargs"))
+
+    def stream_parse_and_execute(self, msg: str):
+        toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
+        return self.stream_execute(toolcall.get("toolname"), toolcall.get("kwargs"))
+
+    async def astream_parse_and_execute(self, msg: str):
+        toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
+        async for value in self.astream_parse_and_execute(
             toolcall.get("toolname"), toolcall.get("kwargs")
-        )
+        ):
+            yield value
 
     def format_tools(self, provider: ProviderFormat):
         return format_tools(self.tools, provider)

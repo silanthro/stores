@@ -215,7 +215,9 @@ try:
                 "tool_id": "{tool_id}",
                 "params": params,
                 "return": return_info,
-                "is_async": inspect.iscoroutinefunction({tool_name}),
+                "iscoroutinefunction": inspect.iscoroutinefunction({tool_name}),
+                "isgeneratorfunction": inspect.isgeneratorfunction({tool_name}),
+                "isasyncgenfunction": inspect.isasyncgenfunction({tool_name}),
                 "doc": inspect.getdoc({tool_name}),
             }},
         }},
@@ -293,25 +295,56 @@ def parse_tool_signature(
     """
     env_var = env_var or {}
 
-    def func_handler(*args, **kwargs):
-        return run_remote_tool(
-            tool_id=signature_dict["tool_id"],
-            index_folder=index_folder,
-            args=args,
-            kwargs=kwargs,
-            venv=venv,
-            env_var=env_var,
-        )
+    if signature_dict.get("isasyncgenfunction"):
 
-    async def async_func_handler(*args, **kwargs):
-        return run_remote_tool(
-            tool_id=signature_dict["tool_id"],
-            index_folder=index_folder,
-            args=args,
-            kwargs=kwargs,
-            venv=venv,
-            env_var=env_var,
-        )
+        async def func_handler(*args, **kwargs):
+            # TODO: Make this truly async
+            for value in run_remote_tool(
+                tool_id=signature_dict["tool_id"],
+                index_folder=index_folder,
+                args=args,
+                kwargs=kwargs,
+                venv=venv,
+                env_var=env_var,
+                stream=True,
+            ):
+                yield value
+    elif signature_dict.get("isgeneratorfunction"):
+
+        def func_handler(*args, **kwargs):
+            for value in run_remote_tool(
+                tool_id=signature_dict["tool_id"],
+                index_folder=index_folder,
+                args=args,
+                kwargs=kwargs,
+                venv=venv,
+                env_var=env_var,
+                stream=True,
+            ):
+                yield value
+    elif signature_dict.get("iscoroutinefunction"):
+
+        async def func_handler(*args, **kwargs):
+            # TODO: Make this truly async
+            return run_remote_tool(
+                tool_id=signature_dict["tool_id"],
+                index_folder=index_folder,
+                args=args,
+                kwargs=kwargs,
+                venv=venv,
+                env_var=env_var,
+            )
+    else:
+
+        def func_handler(*args, **kwargs):
+            return run_remote_tool(
+                tool_id=signature_dict["tool_id"],
+                index_folder=index_folder,
+                args=args,
+                kwargs=kwargs,
+                venv=venv,
+                env_var=env_var,
+            )
 
     # Reconstruct signature from list of args
     params = []
@@ -329,7 +362,7 @@ def parse_tool_signature(
     signature = inspect.Signature(params, return_annotation=return_type)
     func = create_function(
         signature,
-        async_func_handler if signature_dict.get("is_async") else func_handler,
+        func_handler,
         qualname=signature_dict["tool_id"],
         doc=signature_dict.get("doc"),
     )
@@ -345,6 +378,7 @@ def run_remote_tool(
     kwargs: dict | None = None,
     venv: str = VENV_NAME,
     env_var: dict | None = None,
+    stream: bool = False,
 ):
     args = args or []
     kwargs = kwargs or {}
@@ -365,56 +399,108 @@ def run_remote_tool(
     listener.listen(1)
     _, port = listener.getsockname()
 
-    def handle_connection():
+    result_data = {}
+
+    def handle_connection(stream_mode: bool = False):
         conn, _ = listener.accept()
         with conn:
-            data = b""
+            buffer = ""
             while True:
-                chunk = conn.recv(4096)
+                chunk = conn.recv(4096).decode("utf-8")
                 if not chunk:
                     break
-                data += chunk
-            listener.close()
-            return data
+                buffer += chunk
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    if not line.strip():
+                        continue
+                    msg = json.loads(line)
+                    if msg.get("ok") and "stream" in msg:
+                        if stream_mode:
+                            yield msg["stream"]
+                        else:
+                            result_data.setdefault("stream", []).append(msg["stream"])
+                    elif msg.get("ok") and "result" in msg:
+                        result_data["result"] = msg["result"]
+                    elif "error" in msg:
+                        result_data["error"] = msg["error"]
+                    elif msg.get("done"):
+                        if stream_mode:
+                            break
+                        else:
+                            return
 
-    result_data = {}
-    t = threading.Thread(
-        target=lambda: result_data.setdefault("data", handle_connection())
-    )
-    t.start()
+    if not stream:
+        thread = threading.Thread(
+            target=lambda: list(handle_connection(stream_mode=False))
+        )
+        thread.start()
 
     runner = f"""
 import asyncio, inspect, json, socket, sys, traceback
 sys.path.insert(0, "{index_folder}")
+
+def send(sock, payload):
+    sock.sendall((json.dumps(payload) + "\\n").encode("utf-8"))
+
+sock = socket.create_connection(("localhost", {port}))
+
 try:
     from {module_name} import {tool_name}
     params = json.load(sys.stdin)
     args = params.get("args", [])
     kwargs = params.get("kwargs", {{}})
-    if inspect.iscoroutinefunction({tool_name}):
+
+    func = {tool_name}
+
+    if inspect.isasyncgenfunction(func):
+        async def run():
+            async for value in func(*args, **kwargs):
+                send(sock, {{"ok": True, "stream": value}})
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        result = loop.run_until_complete({tool_name}(*args, **kwargs))
+        loop.run_until_complete(run())
+    elif inspect.isgeneratorfunction(func):
+        for value in func(*args, **kwargs):
+            send(sock, {{"ok": True, "stream": value}})
+    elif inspect.iscoroutinefunction(func):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(func(*args, **kwargs))
+        send(sock, {{"ok": True, "result": result}})
     else:
-        result = {tool_name}(*args, **kwargs)
-    response = json.dumps({{"ok": True, "result": result}})
+        result = func(*args, **kwargs)
+        send(sock, {{"ok": True, "result": result}})
+    send(sock, {{"done": True}})
 except Exception as e:
     err = traceback.format_exc()
-    response = json.dumps({{"ok": False, "error": err}})
-sock = socket.create_connection(("localhost", {port}))
-sock.sendall(response.encode("utf-8"))
-sock.close()
+    try:
+        send(sock, {{"ok": False, "error": err}})
+    except:
+        pass
+finally:
+    try:
+        sock.close()
+    except:
+        pass
 """
-    result = subprocess.run(
+    subprocess.run(
         [get_python_command(Path(index_folder) / venv), "-c", runner],
         input=payload,
         capture_output=True,
         env=env_var or None,
     )
 
-    t.join()
-    response = json.loads(result_data["data"].decode("utf-8"))
-    if response.get("ok"):
-        return response["result"]
+    if not stream:
+        thread.join()
+
+        if "error" in result_data:
+            raise RuntimeError(f"Subprocess failed with error:\n{result_data['error']}")
+        elif "result" in result_data:
+            return result_data["result"]
+        elif "stream" in result_data:
+            return result_data["stream"]
+        else:
+            raise RuntimeError("Subprocess completed without returning data.")
     else:
-        raise RuntimeError(f"Subprocess failed with error:\n{response['error']}")
+        return handle_connection(stream_mode=True)
