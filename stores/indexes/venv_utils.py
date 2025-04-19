@@ -215,7 +215,9 @@ try:
                 "tool_id": "{tool_id}",
                 "params": params,
                 "return": return_info,
-                "is_async": inspect.iscoroutinefunction({tool_name}),
+                "iscoroutinefunction": inspect.iscoroutinefunction({tool_name}),
+                "isgeneratorfunction": inspect.isgeneratorfunction({tool_name}),
+                "isasyncgenfunction": inspect.isasyncgenfunction({tool_name}),
                 "doc": inspect.getdoc({tool_name}),
             }},
         }},
@@ -293,25 +295,56 @@ def parse_tool_signature(
     """
     env_var = env_var or {}
 
-    def func_handler(*args, **kwargs):
-        return run_remote_tool(
-            tool_id=signature_dict["tool_id"],
-            index_folder=index_folder,
-            args=args,
-            kwargs=kwargs,
-            venv=venv,
-            env_var=env_var,
-        )
+    if signature_dict.get("isasyncgenfunction"):
 
-    async def async_func_handler(*args, **kwargs):
-        return run_remote_tool(
-            tool_id=signature_dict["tool_id"],
-            index_folder=index_folder,
-            args=args,
-            kwargs=kwargs,
-            venv=venv,
-            env_var=env_var,
-        )
+        async def func_handler(*args, **kwargs):
+            # TODO: Make this truly async
+            for value in run_remote_tool(
+                tool_id=signature_dict["tool_id"],
+                index_folder=index_folder,
+                args=args,
+                kwargs=kwargs,
+                venv=venv,
+                env_var=env_var,
+                stream=True,
+            ):
+                yield value
+    elif signature_dict.get("isgeneratorfunction"):
+
+        def func_handler(*args, **kwargs):
+            for value in run_remote_tool(
+                tool_id=signature_dict["tool_id"],
+                index_folder=index_folder,
+                args=args,
+                kwargs=kwargs,
+                venv=venv,
+                env_var=env_var,
+                stream=True,
+            ):
+                yield value
+    elif signature_dict.get("iscoroutinefunction"):
+
+        async def func_handler(*args, **kwargs):
+            # TODO: Make this truly async
+            return run_remote_tool(
+                tool_id=signature_dict["tool_id"],
+                index_folder=index_folder,
+                args=args,
+                kwargs=kwargs,
+                venv=venv,
+                env_var=env_var,
+            )
+    else:
+
+        def func_handler(*args, **kwargs):
+            return run_remote_tool(
+                tool_id=signature_dict["tool_id"],
+                index_folder=index_folder,
+                args=args,
+                kwargs=kwargs,
+                venv=venv,
+                env_var=env_var,
+            )
 
     # Reconstruct signature from list of args
     params = []
@@ -329,7 +362,7 @@ def parse_tool_signature(
     signature = inspect.Signature(params, return_annotation=return_type)
     func = create_function(
         signature,
-        async_func_handler if signature_dict.get("is_async") else func_handler,
+        func_handler,
         qualname=signature_dict["tool_id"],
         doc=signature_dict.get("doc"),
     )
