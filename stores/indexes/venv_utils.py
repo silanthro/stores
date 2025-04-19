@@ -399,6 +399,8 @@ def run_remote_tool(
     listener.listen(1)
     _, port = listener.getsockname()
 
+    result_data = {}
+
     def handle_connection(stream_mode: bool = False):
         conn, _ = listener.accept()
         with conn:
@@ -423,19 +425,12 @@ def run_remote_tool(
                     elif "error" in msg:
                         result_data["error"] = msg["error"]
                     elif msg.get("done"):
-                        return
+                        if stream_mode:
+                            break
+                        else:
+                            return
 
-    if stream:
-
-        def stream_generator():
-            for value in handle_connection(stream_mode=True):
-                yield value
-
-        thread = threading.Thread(target=lambda: list(stream_generator()))
-        thread.start()
-
-    else:
-        result_data = {}
+    if not stream:
         thread = threading.Thread(
             target=lambda: list(handle_connection(stream_mode=False))
         )
@@ -496,15 +491,16 @@ finally:
         env=env_var or None,
     )
 
-    thread.join()
-    if "error" in result_data:
-        raise RuntimeError(f"Subprocess failed with error:\n{result_data['error']}")
+    if not stream:
+        thread.join()
 
-    if stream:
-        return stream_generator()
-    elif "result" in result_data:
-        return result_data["result"]
-    elif "stream" in result_data:
-        return result_data["stream"]
+        if "error" in result_data:
+            raise RuntimeError(f"Subprocess failed with error:\n{result_data['error']}")
+        elif "result" in result_data:
+            return result_data["result"]
+        elif "stream" in result_data:
+            return result_data["stream"]
+        else:
+            raise RuntimeError("Subprocess completed without returning data.")
     else:
-        raise RuntimeError("Subprocess completed without returning data.")
+        return handle_connection(stream_mode=True)
