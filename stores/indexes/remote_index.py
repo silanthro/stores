@@ -51,6 +51,8 @@ class RemoteIndex(BaseIndex):
         self,
         index_id: str,
         env_var: dict | None = None,
+        include: list[str] | None = None,
+        exclude: list[str] | None = None,
         cache_dir: Optional[PathLike] = None,
         reset_cache=False,
         sys_executable: str | None = None,
@@ -64,6 +66,8 @@ class RemoteIndex(BaseIndex):
             shutil.rmtree(cache_dir)
         self.index_folder = cache_dir / self.index_id
         self.env_var = env_var or {}
+        include = include or []
+        exclude = exclude or []
         if not self.index_folder.exists():
             logger.info(f"Installing {index_id}...")
             commit_like = None
@@ -99,5 +103,7 @@ class RemoteIndex(BaseIndex):
                 venv.create(self.venv, symlinks=True, with_pip=True, upgrade_deps=True)
         install_venv_deps(self.index_folder)
         # Initialize tools
-        tools = init_venv_tools(self.index_folder, self.env_var)
+        tools = init_venv_tools(
+            self.index_folder, env_var=self.env_var, include=include, exclude=exclude
+        )
         super().__init__(tools)

@@ -104,16 +104,25 @@ def install_venv_deps(index_folder: os.PathLike):
             return message
 
 
-def init_venv_tools(index_folder: os.PathLike, env_var: dict | None = None):
+def init_venv_tools(
+    index_folder: os.PathLike,
+    env_var: dict | None = None,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+):
     index_folder = Path(index_folder)
     env_var = env_var or {}
+    include = include or []
+    exclude = exclude or []
 
     index_manifest = index_folder / TOOLS_CONFIG_FILENAME
     with open(index_manifest, "rb") as file:
         manifest = tomllib.load(file)["index"]
 
     tools = []
-    for tool_id in manifest.get("tools", []):
+    for tool_id in include or manifest.get("tools", []):
+        if tool_id in exclude:
+            continue
         tool_sig = get_tool_signature(
             tool_id=tool_id,
             index_folder=index_folder,
