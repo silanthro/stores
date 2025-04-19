@@ -35,9 +35,11 @@ async def test_install_venv_deps(remote_index_folder):
     result = venv_utils.install_venv_deps(remote_index_folder)
     assert (remote_index_folder / venv_utils.HASH_FILE).exists()
 
-    for config_file, cmd in venv_utils.SUPPORTED_DEP_CONFIGS.items():
+    for config_file in venv_utils.SUPPORTED_CONFIGS:
         if (remote_index_folder / config_file).exists():
-            assert result.endswith(cmd)
+            assert result.endswith(
+                f'"{" ".join(venv_utils.get_pip_command(venv_folder, config_file))}"'
+            )
             assert venv_utils.has_installed(remote_index_folder / config_file)
             break
 

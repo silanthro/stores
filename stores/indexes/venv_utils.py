@@ -28,11 +28,35 @@ logger.setLevel(logging.INFO)
 HASH_FILE = ".deps_hash"
 
 
-SUPPORTED_DEP_CONFIGS = {
-    "pyproject.toml": f"{VENV_NAME}/bin/pip install .",
-    "setup.py": f"{VENV_NAME}/bin/pip install .",
-    "requirements.txt": f"{VENV_NAME}/bin/pip install -r requirements.txt",
-}
+SUPPORTED_CONFIGS = [
+    "pyproject.toml",
+    "setup.py",
+    "requirements.txt",
+]
+
+
+def get_pip_command(venv_path: os.PathLike, config_file: str) -> list[str]:
+    venv_path = Path(venv_path).resolve()
+    if os.name == "nt":
+        pip_path = venv_path / "Scripts" / "pip.exe"
+    else:
+        pip_path = venv_path / "bin" / "pip"
+
+    if config_file in {"pyproject.toml", "setup.py"}:
+        return [str(pip_path), "install", "."]
+    elif config_file == "requirements.txt":
+        return [str(pip_path), "install", "-r", "requirements.txt"]
+    else:
+        raise ValueError(f"Unsupported config file: {config_file}")
+
+
+def get_python_command(venv_path: os.PathLike) -> list[str]:
+    venv_path = Path(venv_path).resolve()
+    if os.name == "nt":
+        executable = venv_path / "Scripts" / "python.exe"
+    else:
+        executable = venv_path / "bin" / "python"
+    return str(executable)
 
 
 def has_installed(config_path: os.PathLike):
@@ -63,18 +87,19 @@ def write_hash(config_path: os.PathLike):
 def install_venv_deps(index_folder: os.PathLike):
     index_folder = Path(index_folder)
 
-    for config_file, install_cmd in SUPPORTED_DEP_CONFIGS.items():
+    for config_file in SUPPORTED_CONFIGS:
         config_path = index_folder / config_file
         if config_path.exists():
             # Check if already installed
             if has_installed(config_path):
                 return "Already installed"
+            pip_command = get_pip_command(index_folder / VENV_NAME, config_file)
             subprocess.check_call(
-                install_cmd.split(),
+                pip_command,
                 cwd=index_folder,
             )
             write_hash(config_path)
-            message = f"Installed with {index_folder}/{install_cmd}"
+            message = f'Installed with "{" ".join(pip_command)}"'
             logger.info(message)
             return message
 
@@ -201,10 +226,10 @@ except Exception as e:
     pickle.dump({{"ok": False, "error": err}}, sys.stdout.buffer)
 """
     result = subprocess.run(
-        [f"{venv}/bin/python", "-c", runner],
+        [get_python_command(Path(index_folder) / venv), "-c", runner],
         capture_output=True,
         cwd=index_folder,
-        env=env_var,
+        env=env_var or None,
     )
     try:
         response = pickle.loads(result.stdout)
@@ -380,11 +405,11 @@ sock = socket.create_connection(("localhost", {port}))
 sock.sendall(response.encode("utf-8"))
 sock.close()
 """
-    subprocess.run(
-        [f"{index_folder}/{venv}/bin/python", "-c", runner],
+    result = subprocess.run(
+        [get_python_command(Path(index_folder) / venv), "-c", runner],
         input=payload,
         capture_output=True,
-        env=env_var,
+        env=env_var or None,
     )
 
     t.join()
