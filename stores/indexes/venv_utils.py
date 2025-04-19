@@ -345,6 +345,7 @@ def run_remote_tool(
     kwargs: dict | None = None,
     venv: str = VENV_NAME,
     env_var: dict | None = None,
+    stream: bool = False,
 ):
     args = args or []
     kwargs = kwargs or {}
@@ -365,56 +366,113 @@ def run_remote_tool(
     listener.listen(1)
     _, port = listener.getsockname()
 
-    def handle_connection():
+    def handle_connection(stream_mode: bool = False):
         conn, _ = listener.accept()
         with conn:
-            data = b""
+            buffer = ""
             while True:
-                chunk = conn.recv(4096)
+                chunk = conn.recv(4096).decode("utf-8")
                 if not chunk:
                     break
-                data += chunk
-            listener.close()
-            return data
+                buffer += chunk
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    if not line.strip():
+                        continue
+                    msg = json.loads(line)
+                    if msg.get("ok") and "stream" in msg:
+                        if stream_mode:
+                            yield msg["stream"]
+                        else:
+                            result_data.setdefault("stream", []).append(msg["stream"])
+                    elif msg.get("ok") and "result" in msg:
+                        result_data["result"] = msg["result"]
+                    elif "error" in msg:
+                        result_data["error"] = msg["error"]
+                    elif msg.get("done"):
+                        return
 
-    result_data = {}
-    t = threading.Thread(
-        target=lambda: result_data.setdefault("data", handle_connection())
-    )
-    t.start()
+    if stream:
+
+        def stream_generator():
+            for value in handle_connection(stream_mode=True):
+                yield value
+
+        thread = threading.Thread(target=lambda: list(stream_generator()))
+        thread.start()
+
+    else:
+        result_data = {}
+        thread = threading.Thread(
+            target=lambda: list(handle_connection(stream_mode=False))
+        )
+        thread.start()
 
     runner = f"""
 import asyncio, inspect, json, socket, sys, traceback
 sys.path.insert(0, "{index_folder}")
+
+def send(sock, payload):
+    sock.sendall((json.dumps(payload) + "\\n").encode("utf-8"))
+
 try:
     from {module_name} import {tool_name}
     params = json.load(sys.stdin)
     args = params.get("args", [])
     kwargs = params.get("kwargs", {{}})
-    if inspect.iscoroutinefunction({tool_name}):
+
+    sock = socket.create_connection(("localhost", {port}))
+
+    func = {tool_name}
+
+    if inspect.isasyncgenfunction(func):
+        async def run():
+            async for value in func(*args, **kwargs):
+                send(sock, {{"ok": True, "stream": value}})
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        result = loop.run_until_complete({tool_name}(*args, **kwargs))
+        loop.run_until_complete(run())
+    elif inspect.isgeneratorfunction(func):
+        for value in func(*args, **kwargs):
+            send(sock, {{"ok": True, "stream": value}})
+    elif inspect.iscoroutinefunction(func):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(func(*args, **kwargs))
+        send(sock, {{"ok": True, "result": result}})
     else:
-        result = {tool_name}(*args, **kwargs)
-    response = json.dumps({{"ok": True, "result": result}})
+        result = func(*args, **kwargs)
+        send(sock, {{"ok": True, "result": result}})
+    send(sock, {{"done": True}})
 except Exception as e:
     err = traceback.format_exc()
-    response = json.dumps({{"ok": False, "error": err}})
-sock = socket.create_connection(("localhost", {port}))
-sock.sendall(response.encode("utf-8"))
-sock.close()
+    try:
+        sock = socket.create_connection(("localhost", {port}))
+        send(sock, {{"ok": False, "error": err}})
+    except:
+        pass
+finally:
+    try:
+        sock.close()
+    except:
+        pass
 """
-    result = subprocess.run(
+    subprocess.run(
         [get_python_command(Path(index_folder) / venv), "-c", runner],
         input=payload,
         capture_output=True,
         env=env_var or None,
     )
 
-    t.join()
-    response = json.loads(result_data["data"].decode("utf-8"))
-    if response.get("ok"):
-        return response["result"]
+    thread.join()
+    if "error" in result_data:
+        raise RuntimeError(f"Subprocess failed with error:\n{result_data['error']}")
+
+    if stream:
+        return stream_generator()
+    elif "result" in result_data:
+        return result_data["result"]
+    elif "stream" in result_data:
+        return result_data["stream"]
     else:
-        raise RuntimeError(f"Subprocess failed with error:\n{response['error']}")
+        raise RuntimeError("Subprocess completed without returning data.")
