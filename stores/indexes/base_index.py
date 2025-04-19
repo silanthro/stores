@@ -128,6 +128,23 @@ def _undo_non_string_literal(annotation: type, value: Any, literal_map: dict):
     return value
 
 
+def _preprocess_args(
+    original_signature: inspect.Signature, literal_maps: dict, args: list, kwargs: dict
+):
+    # Inject default values within wrapper
+    bound_args = original_signature.bind(*args, **kwargs)
+    bound_args.apply_defaults()
+    _cast_bound_args(bound_args)
+    # Inject correct Literals
+    for k, v in bound_args.arguments.items():
+        if k in literal_maps:
+            param = original_signature.parameters[k]
+            bound_args.arguments[k] = _undo_non_string_literal(
+                param.annotation, v, literal_maps[k]
+            )
+    return bound_args
+
+
 def wrap_tool(tool: Callable):
     """
     Wrap tool to make it compatible with LLM libraries
@@ -189,42 +206,37 @@ def wrap_tool(tool: Callable):
         new_args.append(new_arg)
     new_sig = original_signature.replace(parameters=new_args)
 
-    if inspect.iscoroutinefunction(tool):
+    if inspect.isasyncgenfunction(tool):
 
         async def wrapper(*args, **kwargs):
-            # Inject default values within wrapper
-            bound_args = original_signature.bind(*args, **kwargs)
-            bound_args.apply_defaults()
-            _cast_bound_args(bound_args)
-            # Inject correct Literals
-            for k, v in bound_args.arguments.items():
-                if k in literal_maps:
-                    param = original_signature.parameters[k]
-                    bound_args.arguments[k] = _undo_non_string_literal(
-                        param.annotation, v, literal_maps[k]
-                    )
+            bound_args = _preprocess_args(
+                original_signature, literal_maps, args, kwargs
+            )
+            async for value in tool(*bound_args.args, **bound_args.kwargs):
+                yield value
+
+    elif inspect.isgeneratorfunction(tool):
+
+        def wrapper(*args, **kwargs):
+            bound_args = _preprocess_args(
+                original_signature, literal_maps, args, kwargs
+            )
+            for value in tool(*bound_args.args, **bound_args.kwargs):
+                yield value
+
+    elif inspect.iscoroutinefunction(tool):
+
+        async def wrapper(*args, **kwargs):
+            bound_args = _preprocess_args(
+                original_signature, literal_maps, args, kwargs
+            )
             return await tool(*bound_args.args, **bound_args.kwargs)
     else:
 
         def wrapper(*args, **kwargs):
-            # Inject default values within wrapper
-            bound_args = original_signature.bind(*args, **kwargs)
-            bound_args.apply_defaults()
-            # Inject correct Literals
-            for k, v in bound_args.arguments.items():
-                if (
-                    v is None
-                    and original_signature.parameters[k].default is not Parameter.empty
-                ):
-                    bound_args.arguments[k] = original_signature.parameters[k].default
-
-            _cast_bound_args(bound_args)
-            for k, v in bound_args.arguments.items():
-                if k in literal_maps:
-                    param = original_signature.parameters[k]
-                    bound_args.arguments[k] = _undo_non_string_literal(
-                        param.annotation, v, literal_maps[k]
-                    )
+            bound_args = _preprocess_args(
+                original_signature, literal_maps, args, kwargs
+            )
             return tool(*bound_args.args, **bound_args.kwargs)
 
     wrapped = create_function(
@@ -269,6 +281,7 @@ class BaseIndex:
 
     def execute(self, toolname: str, kwargs: dict | None = None, collect_results=False):
         tool_fn = self._get_tool(toolname)
+        kwargs = kwargs or {}
         if inspect.isasyncgenfunction(tool_fn):
             # Handle async generator
 
@@ -306,6 +319,7 @@ class BaseIndex:
         self, toolname: str, kwargs: dict | None = None, collect_results=False
     ):
         tool_fn = self._get_tool(toolname)
+        kwargs = kwargs or {}
         if inspect.isasyncgenfunction(tool_fn):
             # Handle async generator
             results = []
@@ -331,10 +345,9 @@ class BaseIndex:
             # Handle sync
             return tool_fn(**kwargs)
 
-    def stream_execute(
-        self, toolname: str, kwargs: dict | None = None, collect_results=False
-    ):
+    def stream_execute(self, toolname: str, kwargs: dict | None = None):
         tool_fn = self._get_tool(toolname)
+        kwargs = kwargs or {}
         if inspect.isasyncgenfunction(tool_fn):
             # Handle async generator
 
@@ -365,10 +378,9 @@ class BaseIndex:
             # Handle sync
             yield tool_fn(**kwargs)
 
-    async def astream_execute(
-        self, toolname: str, kwargs: dict | None = None, collect_results=False
-    ):
+    async def astream_execute(self, toolname: str, kwargs: dict | None = None):
         tool_fn = self._get_tool(toolname)
+        kwargs = kwargs or {}
         if inspect.isasyncgenfunction(tool_fn):
             # Handle async generator
             async for value in tool_fn(**kwargs):
