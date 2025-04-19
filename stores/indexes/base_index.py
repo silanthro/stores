@@ -250,6 +250,11 @@ class BaseIndex:
         return {tool.__name__: tool for tool in self.tools}
 
     def execute(self, toolname: str, kwargs: dict | None = None):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(self.async_execute(toolname, kwargs))
+
+    async def async_execute(self, toolname: str, kwargs: dict | None = None):
         kwargs = kwargs or {}
 
         # Use regex since we need to match cases where we perform
@@ -269,15 +274,19 @@ class BaseIndex:
 
         tool = self.tools_dict[toolname]
         if inspect.iscoroutinefunction(tool):
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            return loop.run_until_complete(tool(**kwargs))
+            return await tool(**kwargs)
         else:
             return tool(**kwargs)
 
     def parse_and_execute(self, msg: str):
         toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
         return self.execute(toolcall.get("toolname"), toolcall.get("kwargs"))
+
+    async def async_parse_and_execute(self, msg: str):
+        toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
+        return await self.async_execute(
+            toolcall.get("toolname"), toolcall.get("kwargs")
+        )
 
     def format_tools(self, provider: ProviderFormat):
         return format_tools(self.tools, provider)
