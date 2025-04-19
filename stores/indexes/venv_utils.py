@@ -462,7 +462,7 @@ def run_remote_tool(
             conn.close()
 
     if not stream:
-        thread = threading.Thread(target=lambda: list(handle_connection_sync()))
+        thread = threading.Thread(target=lambda: handle_connection_sync())
         thread.start()
 
     runner = f"""
