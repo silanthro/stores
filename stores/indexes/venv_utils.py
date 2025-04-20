@@ -151,8 +151,14 @@ def get_tool_signature(
     tool_name = tool_id.split(".")[-1]
     env_var = env_var or {}
 
+    # We use sockets to pass pass function metadata
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(("localhost", 0))
+    listener.listen(1)
+    _, port = listener.getsockname()
+
     runner = f"""
-import pickle, sys, traceback, inspect, enum
+import pickle, sys, traceback, inspect, enum, socket
 from typing import Any, Dict, List, Literal, Tuple, Union, get_args, get_origin, get_type_hints
 import types as T
 
@@ -206,8 +212,9 @@ def extract_type_info(typ, custom_types: list[str] | None = None):
 
 try:
     from {module_name} import {tool_name}
-    sig = inspect.signature({tool_name})
-    hints = get_type_hints({tool_name})
+    func = {tool_name}
+    sig = inspect.signature(func)
+    hints = get_type_hints(func)
     params = {{}}
     for name, param in sig.parameters.items():
         hint = hints.get(name, param.annotation)
@@ -218,33 +225,44 @@ try:
     return_type = hints.get('return', sig.return_annotation)
     return_info = extract_type_info(return_type)
 
-    pickle.dump(
-        {{
-            "ok": True,
-            "result": {{
-                "tool_id": "{tool_id}",
-                "params": params,
-                "return": return_info,
-                "iscoroutinefunction": inspect.iscoroutinefunction({tool_name}),
-                "isgeneratorfunction": inspect.isgeneratorfunction({tool_name}),
-                "isasyncgenfunction": inspect.isasyncgenfunction({tool_name}),
-                "doc": inspect.getdoc({tool_name}),
-            }},
+    payload = {{
+        "ok": True,
+        "result": {{
+            "tool_id": "{tool_id}",
+            "params": params,
+            "return": return_info,
+            "iscoroutinefunction": inspect.iscoroutinefunction(func),
+            "isgeneratorfunction": inspect.isgeneratorfunction(func),
+            "isasyncgenfunction": inspect.isasyncgenfunction(func),
+            "doc": inspect.getdoc(func),
         }},
-        sys.stdout.buffer,
-    )
+    }}
 except Exception as e:
-    err = traceback.format_exc()
-    pickle.dump({{"ok": False, "error": err}}, sys.stdout.buffer)
+    payload = {{"ok": False, "error": traceback.format_exc()}}
+
+with socket.create_connection(("localhost", {port})) as s:
+    s.sendall(pickle.dumps(payload))
 """
-    result = subprocess.run(
+    proc = subprocess.Popen(
         [get_python_command(Path(index_folder) / venv), "-c", runner],
-        capture_output=True,
         cwd=index_folder,
         env=env_var or None,
     )
+
+    conn, _ = listener.accept()
+    with conn:
+        data = b""
+        while True:
+            chunk = conn.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+
+    listener.close()
+    proc.wait()
+
     try:
-        response = pickle.loads(result.stdout)
+        response = pickle.loads(data)
     except ModuleNotFoundError as e:
         raise RuntimeError(
             f"Error loading tool {tool_id}:\nThe tool most likely has a parameter of a custom type that cannot be exported"
