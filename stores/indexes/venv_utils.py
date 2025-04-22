@@ -340,16 +340,28 @@ def parse_tool_signature(
     elif signature_dict.get("isgeneratorfunction"):
 
         def func_handler(*args, **kwargs):
-            for value in run_remote_tool(
-                tool_id=signature_dict["tool_id"],
-                index_folder=index_folder,
-                args=args,
-                kwargs=kwargs,
-                venv=venv,
-                env_var=env_var,
-                stream=True,
-            ):
-                yield value
+            async def collect():
+                async for value in run_remote_tool(
+                    tool_id=signature_dict["tool_id"],
+                    index_folder=index_folder,
+                    args=args,
+                    kwargs=kwargs,
+                    venv=venv,
+                    env_var=env_var,
+                    stream=True,
+                ):
+                    yield value
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            agen = collect()
+            try:
+                while True:
+                    yield loop.run_until_complete(agen.__anext__())
+            except StopAsyncIteration:
+                pass
+            finally:
+                loop.close()
     elif signature_dict.get("iscoroutinefunction"):
 
         async def func_handler(*args, **kwargs):
