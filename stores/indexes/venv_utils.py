@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import pickle
+import queue
 import socket
 import subprocess
 import sys
@@ -340,28 +341,43 @@ def parse_tool_signature(
     elif signature_dict.get("isgeneratorfunction"):
 
         def func_handler(*args, **kwargs):
-            async def collect():
-                async for value in run_remote_tool(
-                    tool_id=signature_dict["tool_id"],
-                    index_folder=index_folder,
-                    args=args,
-                    kwargs=kwargs,
-                    venv=venv,
-                    env_var=env_var,
-                    stream=True,
-                ):
-                    yield value
+            q = queue.Queue()
+            sentinel = object()
 
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            agen = collect()
-            try:
-                while True:
-                    yield loop.run_until_complete(agen.__anext__())
-            except StopAsyncIteration:
-                pass
-            finally:
-                loop.close()
+            def run():
+                async def runner():
+                    try:
+                        async for item in run_remote_tool(
+                            tool_id=signature_dict["tool_id"],
+                            index_folder=index_folder,
+                            args=args,
+                            kwargs=kwargs,
+                            venv=venv,
+                            env_var=env_var,
+                            stream=True,
+                        ):
+                            q.put(item)
+                    except Exception as e:
+                        q.put(e)
+                    finally:
+                        q.put(sentinel)
+
+                asyncio.run(runner())
+
+            t = threading.Thread(target=run)
+            t.start()
+
+            while True:
+                item = q.get()
+                if item is sentinel:
+                    break
+                elif isinstance(item, Exception):
+                    raise item
+                else:
+                    yield item
+
+            t.join()
+
     elif signature_dict.get("iscoroutinefunction"):
 
         async def func_handler(*args, **kwargs):
