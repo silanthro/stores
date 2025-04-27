@@ -401,13 +401,17 @@ class BaseIndex:
             # Handle sync
             yield tool_fn(**kwargs)
 
-    def parse_and_execute(self, msg: str):
+    def parse_and_execute(self, msg: str, collect_results=False):
         toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
-        return self.execute(toolcall.get("toolname"), toolcall.get("kwargs"))
+        return self.execute(
+            toolcall.get("toolname"), toolcall.get("kwargs"), collect_results
+        )
 
-    async def async_parse_and_execute(self, msg: str):
+    async def aparse_and_execute(self, msg: str, collect_results=False):
         toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
-        return await self.aexecute(toolcall.get("toolname"), toolcall.get("kwargs"))
+        return await self.aexecute(
+            toolcall.get("toolname"), toolcall.get("kwargs"), collect_results
+        )
 
     def stream_parse_and_execute(self, msg: str):
         toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
@@ -415,7 +419,7 @@ class BaseIndex:
 
     async def astream_parse_and_execute(self, msg: str):
         toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
-        async for value in self.astream_parse_and_execute(
+        async for value in self.astream_execute(
             toolcall.get("toolname"), toolcall.get("kwargs")
         ):
             yield value
