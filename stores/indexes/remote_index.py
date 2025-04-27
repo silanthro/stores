@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 import requests
-from git import Repo
+from git import GitCommandError, Repo
 
 from stores.constants import VENV_NAME
 from stores.indexes.base_index import BaseIndex
@@ -44,6 +44,8 @@ def lookup_index(index_id: str, index_version: str | None = None):
     )
     if response.ok:
         return response.json()
+    else:
+        raise ValueError(f"Index {index_id} not found in database")
 
 
 class RemoteIndex(BaseIndex):
@@ -88,7 +90,10 @@ class RemoteIndex(BaseIndex):
             if not repo_url:
                 # Otherwise, assume index references a GitHub repo
                 repo_url = f"https://github.com/{index_id}.git"
-            repo = Repo.clone_from(repo_url, self.index_folder)
+            try:
+                repo = Repo.clone_from(repo_url, self.index_folder)
+            except GitCommandError as e:
+                raise ValueError(f"Index {index_id} not found") from e
             if commit_like:
                 repo.git.checkout(commit_like)
 
