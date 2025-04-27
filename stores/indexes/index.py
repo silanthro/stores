@@ -17,11 +17,15 @@ class Index(BaseIndex):
         self,
         tools: list[Callable, os.PathLike] | None = None,
         env_var: dict[str, dict] | None = None,
+        include: dict[str, list[str]] | None = None,
+        exclude: dict[str, list[str]] | None = None,
         cache_dir: Optional[os.PathLike] = None,
         reset_cache=False,
         sys_executable: str | None = None,
     ):
         self.env_var = env_var or {}
+        include = include or {}
+        exclude = exclude or {}
         tools = tools or []
 
         _tools = []
@@ -32,7 +36,11 @@ class Index(BaseIndex):
                 if Path(index_name).exists():
                     # Load LocalIndex
                     try:
-                        loaded_index = LocalIndex(index_name)
+                        loaded_index = LocalIndex(
+                            index_name,
+                            include=include.get(index_name),
+                            exclude=exclude.get(index_name),
+                        )
                     except Exception:
                         logger.warning(
                             f'Unable to load index "{index_name}"', exc_info=True
@@ -43,6 +51,8 @@ class Index(BaseIndex):
                         loaded_index = RemoteIndex(
                             index_name,
                             env_var=self.env_var.get(index_name),
+                            include=include.get(index_name),
+                            exclude=exclude.get(index_name),
                             cache_dir=cache_dir,
                             reset_cache=reset_cache,
                             sys_executable=sys_executable,

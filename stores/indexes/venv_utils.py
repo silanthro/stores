@@ -1,9 +1,11 @@
+import asyncio
 import hashlib
 import inspect
 import json
 import logging
 import os
 import pickle
+import queue
 import socket
 import subprocess
 import sys
@@ -104,16 +106,25 @@ def install_venv_deps(index_folder: os.PathLike):
             return message
 
 
-def init_venv_tools(index_folder: os.PathLike, env_var: dict | None = None):
+def init_venv_tools(
+    index_folder: os.PathLike,
+    env_var: dict | None = None,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+):
     index_folder = Path(index_folder)
     env_var = env_var or {}
+    include = include or []
+    exclude = exclude or []
 
     index_manifest = index_folder / TOOLS_CONFIG_FILENAME
     with open(index_manifest, "rb") as file:
         manifest = tomllib.load(file)["index"]
 
     tools = []
-    for tool_id in manifest.get("tools", []):
+    for tool_id in include or manifest.get("tools", []):
+        if tool_id in exclude:
+            continue
         tool_sig = get_tool_signature(
             tool_id=tool_id,
             index_folder=index_folder,
@@ -141,8 +152,14 @@ def get_tool_signature(
     tool_name = tool_id.split(".")[-1]
     env_var = env_var or {}
 
+    # We use sockets to pass pass function metadata
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(("localhost", 0))
+    listener.listen(1)
+    _, port = listener.getsockname()
+
     runner = f"""
-import pickle, sys, traceback, inspect, enum
+import pickle, sys, traceback, inspect, enum, socket
 from typing import Any, Dict, List, Literal, Tuple, Union, get_args, get_origin, get_type_hints
 import types as T
 
@@ -196,8 +213,9 @@ def extract_type_info(typ, custom_types: list[str] | None = None):
 
 try:
     from {module_name} import {tool_name}
-    sig = inspect.signature({tool_name})
-    hints = get_type_hints({tool_name})
+    func = {tool_name}
+    sig = inspect.signature(func)
+    hints = get_type_hints(func)
     params = {{}}
     for name, param in sig.parameters.items():
         hint = hints.get(name, param.annotation)
@@ -208,31 +226,44 @@ try:
     return_type = hints.get('return', sig.return_annotation)
     return_info = extract_type_info(return_type)
 
-    pickle.dump(
-        {{
-            "ok": True,
-            "result": {{
-                "tool_id": "{tool_id}",
-                "params": params,
-                "return": return_info,
-                "is_async": inspect.iscoroutinefunction({tool_name}),
-                "doc": inspect.getdoc({tool_name}),
-            }},
+    payload = {{
+        "ok": True,
+        "result": {{
+            "tool_id": "{tool_id}",
+            "params": params,
+            "return": return_info,
+            "iscoroutinefunction": inspect.iscoroutinefunction(func),
+            "isgeneratorfunction": inspect.isgeneratorfunction(func),
+            "isasyncgenfunction": inspect.isasyncgenfunction(func),
+            "doc": inspect.getdoc(func),
         }},
-        sys.stdout.buffer,
-    )
+    }}
 except Exception as e:
-    err = traceback.format_exc()
-    pickle.dump({{"ok": False, "error": err}}, sys.stdout.buffer)
+    payload = {{"ok": False, "error": traceback.format_exc()}}
+
+with socket.create_connection(("localhost", {port})) as s:
+    s.sendall(pickle.dumps(payload))
 """
-    result = subprocess.run(
+    proc = subprocess.Popen(
         [get_python_command(Path(index_folder) / venv), "-c", runner],
-        capture_output=True,
         cwd=index_folder,
         env=env_var or None,
     )
+
+    conn, _ = listener.accept()
+    with conn:
+        data = b""
+        while True:
+            chunk = conn.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+
+    listener.close()
+    proc.wait()
+
     try:
-        response = pickle.loads(result.stdout)
+        response = pickle.loads(data)
     except ModuleNotFoundError as e:
         raise RuntimeError(
             f"Error loading tool {tool_id}:\nThe tool most likely has a parameter of a custom type that cannot be exported"
@@ -293,25 +324,83 @@ def parse_tool_signature(
     """
     env_var = env_var or {}
 
-    def func_handler(*args, **kwargs):
-        return run_remote_tool(
-            tool_id=signature_dict["tool_id"],
-            index_folder=index_folder,
-            args=args,
-            kwargs=kwargs,
-            venv=venv,
-            env_var=env_var,
-        )
+    if signature_dict.get("isasyncgenfunction"):
 
-    async def async_func_handler(*args, **kwargs):
-        return run_remote_tool(
-            tool_id=signature_dict["tool_id"],
-            index_folder=index_folder,
-            args=args,
-            kwargs=kwargs,
-            venv=venv,
-            env_var=env_var,
-        )
+        async def func_handler(*args, **kwargs):
+            # TODO: Make this truly async
+            async for value in run_remote_tool(
+                tool_id=signature_dict["tool_id"],
+                index_folder=index_folder,
+                args=args,
+                kwargs=kwargs,
+                venv=venv,
+                env_var=env_var,
+                stream=True,
+            ):
+                yield value
+    elif signature_dict.get("isgeneratorfunction"):
+
+        def func_handler(*args, **kwargs):
+            q = queue.Queue()
+            sentinel = object()
+
+            def run():
+                async def runner():
+                    try:
+                        async for item in run_remote_tool(
+                            tool_id=signature_dict["tool_id"],
+                            index_folder=index_folder,
+                            args=args,
+                            kwargs=kwargs,
+                            venv=venv,
+                            env_var=env_var,
+                            stream=True,
+                        ):
+                            q.put(item)
+                    except Exception as e:
+                        q.put(e)
+                    finally:
+                        q.put(sentinel)
+
+                asyncio.run(runner())
+
+            t = threading.Thread(target=run)
+            t.start()
+
+            while True:
+                item = q.get()
+                if item is sentinel:
+                    break
+                elif isinstance(item, Exception):
+                    raise item
+                else:
+                    yield item
+
+            t.join()
+
+    elif signature_dict.get("iscoroutinefunction"):
+
+        async def func_handler(*args, **kwargs):
+            # TODO: Make this truly async
+            return run_remote_tool(
+                tool_id=signature_dict["tool_id"],
+                index_folder=index_folder,
+                args=args,
+                kwargs=kwargs,
+                venv=venv,
+                env_var=env_var,
+            )
+    else:
+
+        def func_handler(*args, **kwargs):
+            return run_remote_tool(
+                tool_id=signature_dict["tool_id"],
+                index_folder=index_folder,
+                args=args,
+                kwargs=kwargs,
+                venv=venv,
+                env_var=env_var,
+            )
 
     # Reconstruct signature from list of args
     params = []
@@ -329,7 +418,7 @@ def parse_tool_signature(
     signature = inspect.Signature(params, return_annotation=return_type)
     func = create_function(
         signature,
-        async_func_handler if signature_dict.get("is_async") else func_handler,
+        func_handler,
         qualname=signature_dict["tool_id"],
         doc=signature_dict.get("doc"),
     )
@@ -345,6 +434,7 @@ def run_remote_tool(
     kwargs: dict | None = None,
     venv: str = VENV_NAME,
     env_var: dict | None = None,
+    stream: bool = False,
 ):
     args = args or []
     kwargs = kwargs or {}
@@ -365,56 +455,131 @@ def run_remote_tool(
     listener.listen(1)
     _, port = listener.getsockname()
 
-    def handle_connection():
+    result_data = {}
+
+    def handle_connection_sync():
         conn, _ = listener.accept()
         with conn:
-            data = b""
+            buffer = ""
             while True:
-                chunk = conn.recv(4096)
+                chunk = conn.recv(4096).decode("utf-8")
                 if not chunk:
                     break
-                data += chunk
-            listener.close()
-            return data
+                buffer += chunk
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    if not line.strip():
+                        continue
+                    msg = json.loads(line)
+                    if msg.get("ok") and "stream" in msg:
+                        result_data.setdefault("stream", []).append(msg["stream"])
+                    elif msg.get("ok") and "result" in msg:
+                        result_data["result"] = msg["result"]
+                    elif "error" in msg:
+                        result_data["error"] = msg["error"]
+                    elif msg.get("done"):
+                        return
 
-    result_data = {}
-    t = threading.Thread(
-        target=lambda: result_data.setdefault("data", handle_connection())
-    )
-    t.start()
+    async def handle_connection_async():
+        loop = asyncio.get_running_loop()
+        conn, _ = await loop.sock_accept(listener)
+        conn.setblocking(False)
+        buffer = ""
+        try:
+            while True:
+                chunk = await loop.sock_recv(conn, 4096)
+                if not chunk:
+                    break
+                buffer += chunk.decode("utf-8")
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    if not line.strip():
+                        continue
+                    msg = json.loads(line)
+                    if msg.get("ok") and "stream" in msg:
+                        yield msg["stream"]
+                    elif msg.get("ok") and "result" in msg:
+                        yield msg["result"]
+                    elif "error" in msg:
+                        raise RuntimeError(f"Subprocess error:\n{msg['error']}")
+                    elif msg.get("done"):
+                        return
+        finally:
+            conn.close()
+
+    if not stream:
+        thread = threading.Thread(target=lambda: handle_connection_sync())
+        thread.start()
 
     runner = f"""
 import asyncio, inspect, json, socket, sys, traceback
 sys.path.insert(0, "{index_folder}")
+
+def send(sock, payload):
+    sock.sendall((json.dumps(payload) + "\\n").encode("utf-8"))
+
+sock = socket.create_connection(("localhost", {port}))
+
 try:
     from {module_name} import {tool_name}
     params = json.load(sys.stdin)
     args = params.get("args", [])
     kwargs = params.get("kwargs", {{}})
-    if inspect.iscoroutinefunction({tool_name}):
+
+    func = {tool_name}
+
+    if inspect.isasyncgenfunction(func):
+        async def run():
+            async for value in func(*args, **kwargs):
+                send(sock, {{"ok": True, "stream": value}})
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        result = loop.run_until_complete({tool_name}(*args, **kwargs))
+        loop.run_until_complete(run())
+    elif inspect.isgeneratorfunction(func):
+        for value in func(*args, **kwargs):
+            send(sock, {{"ok": True, "stream": value}})
+    elif inspect.iscoroutinefunction(func):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(func(*args, **kwargs))
+        send(sock, {{"ok": True, "result": result}})
     else:
-        result = {tool_name}(*args, **kwargs)
-    response = json.dumps({{"ok": True, "result": result}})
+        result = func(*args, **kwargs)
+        send(sock, {{"ok": True, "result": result}})
+    send(sock, {{"done": True}})
 except Exception as e:
     err = traceback.format_exc()
-    response = json.dumps({{"ok": False, "error": err}})
-sock = socket.create_connection(("localhost", {port}))
-sock.sendall(response.encode("utf-8"))
-sock.close()
+    try:
+        send(sock, {{"ok": False, "error": err}})
+    except:
+        pass
+finally:
+    try:
+        sock.close()
+    except:
+        pass
 """
-    result = subprocess.run(
+
+    proc = subprocess.Popen(
         [get_python_command(Path(index_folder) / venv), "-c", runner],
-        input=payload,
-        capture_output=True,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
         env=env_var or None,
     )
+    proc.stdin.write(payload)
+    proc.stdin.close()
 
-    t.join()
-    response = json.loads(result_data["data"].decode("utf-8"))
-    if response.get("ok"):
-        return response["result"]
+    if not stream:
+        thread.join()
+
+        if "error" in result_data:
+            raise RuntimeError(f"Subprocess failed with error:\n{result_data['error']}")
+        elif "result" in result_data:
+            return result_data["result"]
+        elif "stream" in result_data:
+            return result_data["stream"]
+        else:
+            raise RuntimeError("Subprocess completed without returning data.")
     else:
-        raise RuntimeError(f"Subprocess failed with error:\n{response['error']}")
+        return handle_connection_async()

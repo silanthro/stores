@@ -26,10 +26,14 @@ class LocalIndex(BaseIndex):
         index_folder: os.PathLike,
         create_venv: bool = False,
         env_var: dict | None = None,
+        include: list[str] | None = None,
+        exclude: list[str] | None = None,
         sys_executable: str | None = None,
     ):
         self.index_folder = Path(index_folder)
         self.env_var = env_var or {}
+        include = include or []
+        exclude = exclude or []
 
         if not self.index_folder.exists():
             raise ValueError(
@@ -50,21 +54,31 @@ class LocalIndex(BaseIndex):
                     )
             install_venv_deps(self.index_folder)
             # Initialize tools
-            tools = init_venv_tools(self.index_folder, self.env_var)
+            tools = init_venv_tools(
+                self.index_folder,
+                env_var=self.env_var,
+                include=include,
+                exclude=exclude,
+            )
         else:
             if self.env_var:
                 raise ValueError(
                     "Environment variables will only be restricted if create_venv=True when initializing LocalIndex"
                 )
-            tools = self._init_tools()
+            tools = self._init_tools(include=include, exclude=exclude)
         super().__init__(tools)
 
-    def _init_tools(self):
+    def _init_tools(
+        self, include: list[str] | None = None, exclude: list[str] | None = None
+    ):
         """
         Load local tools.toml file and import tool functions
 
         NOTE: Can we just add index_folder to sys.path and import the functions?
         """
+        include = include or []
+        exclude = exclude or []
+
         index_manifest = self.index_folder / TOOLS_CONFIG_FILENAME
         if not index_manifest.exists():
             raise ValueError(f"Unable to load index - {index_manifest} does not exist")
@@ -73,7 +87,9 @@ class LocalIndex(BaseIndex):
             manifest = tomllib.load(file)["index"]
 
         tools = []
-        for tool_id in manifest.get("tools", []):
+        for tool_id in include or manifest.get("tools", []):
+            if tool_id in exclude:
+                continue
             module_name = ".".join(tool_id.split(".")[:-1])
             tool_name = tool_id.split(".")[-1]
 
