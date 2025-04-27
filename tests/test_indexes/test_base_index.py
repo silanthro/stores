@@ -1,4 +1,6 @@
+import asyncio
 import inspect
+import json
 import logging
 
 import pytest
@@ -197,3 +199,162 @@ def test_base_index_format_tools(sample_tool, provider):
                 },
             }
         ]
+
+
+def handle_various_run_type(tool_fn, kwargs: dict, collect_results=False):
+    if inspect.isasyncgenfunction(tool_fn):
+        # Handle async generator
+
+        async def collect():
+            results = []
+            async for value in tool_fn(**kwargs):
+                results.append(value)
+            if collect_results:
+                return results
+            else:
+                return results[-1]
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(collect())
+    elif inspect.isgeneratorfunction(tool_fn):
+        # Handle sync generator
+        results = []
+        for value in tool_fn(**kwargs):
+            results.append(value)
+        if collect_results:
+            return results
+        else:
+            return results[-1]
+    elif inspect.iscoroutinefunction(tool_fn):
+        # Handle async
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(tool_fn(**kwargs))
+    else:
+        # Handle sync
+        return tool_fn(**kwargs)
+
+
+async def ahandle_various_run_type(tool_fn, kwargs: dict, collect_results=False):
+    kwargs = kwargs or {}
+    if inspect.isasyncgenfunction(tool_fn):
+        # Handle async generator
+        results = []
+        async for value in tool_fn(**kwargs):
+            results.append(value)
+        if collect_results:
+            return results
+        else:
+            return results[-1]
+    elif inspect.isgeneratorfunction(tool_fn):
+        # Handle sync generator
+        results = []
+        for value in tool_fn(**kwargs):
+            results.append(value)
+        if collect_results:
+            return results
+        else:
+            return results[-1]
+    elif inspect.iscoroutinefunction(tool_fn):
+        # Handle async
+        return await tool_fn(**kwargs)
+    else:
+        # Handle sync
+        return tool_fn(**kwargs)
+
+
+def test_base_index_execute(various_runtype_tool):
+    index = BaseIndex([various_runtype_tool])
+
+    assert index.parse_and_execute(
+        json.dumps(
+            {
+                "toolname": various_runtype_tool.__name__,
+                "kwargs": {"bar": "hello"},
+            }
+        )
+    ) == handle_various_run_type(various_runtype_tool, {"bar": "hello"})
+
+
+async def test_base_index_aexecute(various_runtype_tool):
+    index = BaseIndex([various_runtype_tool])
+
+    assert await index.aparse_and_execute(
+        json.dumps(
+            {
+                "toolname": various_runtype_tool.__name__,
+                "kwargs": {"bar": "hello"},
+            }
+        )
+    ) == await ahandle_various_run_type(various_runtype_tool, {"bar": "hello"})
+
+
+def test_base_index_execute_collect(various_runtype_tool):
+    index = BaseIndex([various_runtype_tool])
+
+    assert index.execute(
+        various_runtype_tool.__name__, {"bar": "hello"}, collect_results=True
+    ) == handle_various_run_type(
+        various_runtype_tool, {"bar": "hello"}, collect_results=True
+    )
+
+
+async def test_base_index_aexecute_collect(various_runtype_tool):
+    index = BaseIndex([various_runtype_tool])
+
+    assert await index.aexecute(
+        various_runtype_tool.__name__, {"bar": "hello"}, collect_results=True
+    ) == await ahandle_various_run_type(
+        various_runtype_tool, {"bar": "hello"}, collect_results=True
+    )
+
+
+def test_base_index_stream_execute(various_runtype_tool):
+    index = BaseIndex([various_runtype_tool])
+
+    results = []
+    for result in index.stream_parse_and_execute(
+        json.dumps(
+            {
+                "toolname": various_runtype_tool.__name__,
+                "kwargs": {"bar": "hello"},
+            }
+        )
+    ):
+        results.append(result)
+    if not inspect.isgeneratorfunction(
+        various_runtype_tool
+    ) and not inspect.isasyncgenfunction(various_runtype_tool):
+        results = results[0]
+
+    answer = handle_various_run_type(
+        various_runtype_tool, {"bar": "hello"}, collect_results=True
+    )
+
+    assert results == answer
+
+
+async def test_base_index_astream_execute(various_runtype_tool):
+    index = BaseIndex([various_runtype_tool])
+
+    results = []
+    async for result in index.astream_parse_and_execute(
+        json.dumps(
+            {
+                "toolname": various_runtype_tool.__name__,
+                "kwargs": {"bar": "hello"},
+            }
+        )
+    ):
+        results.append(result)
+    if not inspect.isgeneratorfunction(
+        various_runtype_tool
+    ) and not inspect.isasyncgenfunction(various_runtype_tool):
+        results = results[0]
+
+    answer = await ahandle_various_run_type(
+        various_runtype_tool, {"bar": "hello"}, collect_results=True
+    )
+
+    assert results == answer

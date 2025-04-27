@@ -31,6 +31,11 @@ async def test_index(local_index_folder):
         "tools.async_foo",
         "tools.enum_input",
         "tools.typed_dict_input",
+        "tools.literal_input",
+        "tools.literal_nonstring_input",
+        "tools.default_input",
+        "tools.stream_input",
+        "tools.astream_input",
         "hello.world",
         "foo",
     ]

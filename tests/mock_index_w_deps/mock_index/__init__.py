@@ -55,3 +55,13 @@ def tuple_input(bar: tuple[Animal]) -> tuple[Animal]:
 
 def union_input(bar: Union[Color, Animal]) -> Union[Color, Animal]:
     return bar
+
+
+def stream_input(bar: str):
+    for _ in range(3):
+        yield bar
+
+
+async def astream_input(bar: str):
+    for _ in range(3):
+        yield bar
