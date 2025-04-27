@@ -13,6 +13,11 @@ def test_local_index_basic(local_index_folder):
         "tools.async_foo",
         "tools.enum_input",
         "tools.typed_dict_input",
+        "tools.literal_input",
+        "tools.literal_nonstring_input",
+        "tools.default_input",
+        "tools.stream_input",
+        "tools.astream_input",
         "hello.world",
     ]
     # Test tool execution
@@ -22,6 +27,11 @@ def test_local_index_basic(local_index_folder):
         "tools.async_foo": "hello world",
         "tools.enum_input": "red",
         "tools.typed_dict_input": {"name": "Tiger", "num_legs": 4},
+        "tools.literal_input": "red",
+        "tools.literal_nonstring_input": 1,
+        "tools.default_input": "foo",
+        "tools.stream_input": "hello world",
+        "tools.astream_input": "hello world",
         "hello.world": "hello world",
     }
     for tool in index.tools[:-1]:
@@ -53,9 +63,11 @@ def test_local_index_invalid_folder(buggy_index_folder):
 def test_local_index_with_deps(remote_index_folder):
     # Regular LocalIndex should not load index folder with deps since deps are not installed
     with pytest.raises(ModuleNotFoundError):
-        LocalIndex(remote_index_folder)
+        LocalIndex(remote_index_folder, exclude=["mock_index.not_a_function"])
     # LocalIndex can load index folder with deps if create_venv=True
-    LocalIndex(remote_index_folder, create_venv=True)
+    LocalIndex(
+        remote_index_folder, exclude=["mock_index.not_a_function"], create_venv=True
+    )
 
 
 def test_local_index_with_env_var():

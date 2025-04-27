@@ -21,6 +21,12 @@ def test_lookup_index():
     }
 
 
+async def test_fake_remote_index():
+    fake_index = "no_such_index"
+    with pytest.raises(ValueError, match=f"Index {fake_index} not found"):
+        stores.indexes.RemoteIndex(fake_index)
+
+
 async def test_remote_index():
     # Check that env_vars are set correctly
     index = stores.indexes.RemoteIndex(

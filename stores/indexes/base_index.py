@@ -9,7 +9,6 @@ from typing import (
     Callable,
     List,
     Literal,
-    Optional,
     Tuple,
     Union,
     get_args,
@@ -98,7 +97,7 @@ def _handle_non_string_literal(annotation: type):
         return list[new_annotation], {"item": literal_map}
     if origin is Union or origin is UnionType:
         union_literal_maps = {}
-        argtype_args = [a for a in get_args(annotation) if a != NoneType]
+        argtype_args = [a for a in get_args(annotation)]
         new_union, literal_map = _handle_non_string_literal(argtype_args[0])
         union_literal_maps[new_union.__name__] = literal_map
         for child_argtype in argtype_args[1:]:
@@ -198,12 +197,12 @@ def wrap_tool(tool: Callable):
             # Process args with default values: make sure type includes None
             new_annotation = argtype
             if new_annotation is Parameter.empty:
-                new_annotation = Optional[type(new_arg.default)]
+                new_annotation = type(new_arg.default) | None
             origin = get_origin(new_annotation)
             if origin not in [Union, UnionType] or NoneType not in get_args(
                 new_annotation
             ):
-                new_annotation = Optional[new_annotation]
+                new_annotation = new_annotation | None
             new_arg = new_arg.replace(
                 default=None,
                 kind=Parameter.POSITIONAL_OR_KEYWORD,
@@ -402,13 +401,17 @@ class BaseIndex:
             # Handle sync
             yield tool_fn(**kwargs)
 
-    def parse_and_execute(self, msg: str):
+    def parse_and_execute(self, msg: str, collect_results=False):
         toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
-        return self.execute(toolcall.get("toolname"), toolcall.get("kwargs"))
+        return self.execute(
+            toolcall.get("toolname"), toolcall.get("kwargs"), collect_results
+        )
 
-    async def async_parse_and_execute(self, msg: str):
+    async def aparse_and_execute(self, msg: str, collect_results=False):
         toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
-        return await self.aexecute(toolcall.get("toolname"), toolcall.get("kwargs"))
+        return await self.aexecute(
+            toolcall.get("toolname"), toolcall.get("kwargs"), collect_results
+        )
 
     def stream_parse_and_execute(self, msg: str):
         toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
@@ -416,7 +419,7 @@ class BaseIndex:
 
     async def astream_parse_and_execute(self, msg: str):
         toolcall = llm_parse_json(msg, keys=["toolname", "kwargs"])
-        async for value in self.astream_parse_and_execute(
+        async for value in self.astream_execute(
             toolcall.get("toolname"), toolcall.get("kwargs")
         ):
             yield value

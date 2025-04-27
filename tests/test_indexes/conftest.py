@@ -196,15 +196,15 @@ def foo_w_optional_and_default(bar: Optional[str] = "test"):
     params=[
         {
             "function": foo_w_default,
-            "signature": "(bar: Optional[str] = None)",
+            "signature": "(bar: str | None = None)",
         },
         {
             "function": foo_w_default_notype,
-            "signature": "(bar: Optional[str] = None)",
+            "signature": "(bar: str | None = None)",
         },
         {
             "function": foo_w_optional_and_default,
-            "signature": "(bar: Optional[str] = None)",
+            "signature": "(bar: str | None = None)",
         },
     ],
 )
@@ -465,4 +465,29 @@ def cast_foo_unhandled(bar: list[str, int]):
     ]
 )
 def cast_tool(request):
+    yield request.param
+
+
+def foo(bar: str):
+    return bar
+
+
+async def afoo(bar: str):
+    return bar
+
+
+def stream_foo(bar: str):
+    for _ in range(3):
+        yield bar
+
+
+async def astream_foo(bar: str):
+    for _ in range(3):
+        yield bar
+
+
+@pytest.fixture(
+    params=[foo, afoo, stream_foo, astream_foo],
+)
+def various_runtype_tool(request):
     yield request.param

@@ -11,4 +11,7 @@ tools = [
   "mock_index.dict_input",
   "mock_index.tuple_input",
   "mock_index.union_input",
+  "mock_index.stream_input",
+  "mock_index.astream_input",
+  "mock_index.not_a_function",
 ]
