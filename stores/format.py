@@ -61,7 +61,7 @@ def get_type_repr(typ: Type | GenericAlias) -> list[str]:
         return [type_mappings[typ.__name__]]
 
 
-def get_type_schema(typ: Type | GenericAlias):
+def get_type_schema(typ: Type | GenericAlias, provider: ProviderFormat):
     origin = get_origin(typ)
     args = get_args(typ)
 
@@ -77,24 +77,27 @@ def get_type_schema(typ: Type | GenericAlias):
         schema["enum"] = [v.value for v in typ]
     elif isinstance(typ, type) and typ.__class__.__name__ == "_TypedDictMeta":
         hints = get_type_hints(typ)
-        schema["properties"] = {k: get_type_schema(v) for k, v in hints.items()}
-        schema["additionalProperties"] = False
+        schema["properties"] = {
+            k: get_type_schema(v, provider) for k, v in hints.items()
+        }
+        if provider != ProviderFormat.GOOGLE_GEMINI:
+            schema["additionalProperties"] = False
         schema["required"] = list(hints.keys())
     elif origin in (list, List) or typ is dict:
         if args:
-            schema["items"] = get_type_schema(args[0])
+            schema["items"] = get_type_schema(args[0], provider)
         else:
             raise TypeError("Insufficient argument type information")
     elif origin in (dict, Dict) or typ is dict:
         raise TypeError("Insufficient argument type information")
     elif origin in (tuple, Tuple) or typ is tuple:
         if args:
-            schema["items"] = get_type_schema(args[0])
+            schema["items"] = get_type_schema(args[0], provider)
         else:
             raise TypeError("Insufficient argument type information")
     elif origin is Union or origin is T.UnionType:
         for arg in args:
-            subschema = get_type_schema(arg)
+            subschema = get_type_schema(arg, provider)
             del subschema["type"]
             schema = {
                 **schema,
@@ -103,14 +106,17 @@ def get_type_schema(typ: Type | GenericAlias):
 
     # Un-nest single member type lists since Gemini does not accept list of types
     # Optional for OpenAI or Anthropic
-    if schema["type"] and len(schema["type"]) == 1:
-        schema["type"] = schema["type"][0]
+    if schema["type"]:
+        if len(schema["type"]) == 1:
+            schema["type"] = schema["type"][0]
+        elif len(schema["type"]) > 1 and provider == ProviderFormat.GOOGLE_GEMINI:
+            schema["type"] = schema["type"][0]
 
     return schema
 
 
 def get_param_schema(param: inspect.Parameter, provider: ProviderFormat):
-    param_schema = get_type_schema(param.annotation)
+    param_schema = get_type_schema(param.annotation, provider)
 
     if param_schema["type"] is None:
         raise TypeError(f"Unsupported type: {param.annotation.__name__}")

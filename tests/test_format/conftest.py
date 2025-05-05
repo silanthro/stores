@@ -128,6 +128,8 @@ def a_tool_with_complex_args(provider):
     elif provider == ProviderFormat.GOOGLE_GEMINI:
         for k in parameters.keys():
             parameters[k]["nullable"] = False
+            if parameters[k]["type"] == "object":
+                del parameters[k]["additionalProperties"]
         schema = {
             "name": tool.__name__,
             "parameters": {
