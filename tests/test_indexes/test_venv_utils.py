@@ -134,7 +134,7 @@ def test_index_with_invalid_tool(index_folder_custom_class):
 
 def test_index_with_tool_error(index_folder_function_error):
     tools = venv_utils.init_venv_tools(index_folder_function_error)
-    with pytest.raises(RuntimeError, match="Subprocess failed with error"):
+    with pytest.raises(RuntimeError, match="ZeroDivisionError"):
         tools[0]()
 
 

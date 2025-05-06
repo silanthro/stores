@@ -327,8 +327,7 @@ def parse_tool_signature(
     if signature_dict.get("isasyncgenfunction"):
 
         async def func_handler(*args, **kwargs):
-            # TODO: Make this truly async
-            async for value in run_remote_tool(
+            async for value in run_remote_tool_async(
                 tool_id=signature_dict["tool_id"],
                 index_folder=index_folder,
                 args=args,
@@ -338,6 +337,7 @@ def parse_tool_signature(
                 stream=True,
             ):
                 yield value
+
     elif signature_dict.get("isgeneratorfunction"):
 
         def func_handler(*args, **kwargs):
@@ -347,7 +347,7 @@ def parse_tool_signature(
             def run():
                 async def runner():
                     try:
-                        async for item in run_remote_tool(
+                        async for item in run_remote_tool_async(
                             tool_id=signature_dict["tool_id"],
                             index_folder=index_folder,
                             args=args,
@@ -381,26 +381,63 @@ def parse_tool_signature(
     elif signature_dict.get("iscoroutinefunction"):
 
         async def func_handler(*args, **kwargs):
-            # TODO: Make this truly async
-            return run_remote_tool(
+            result = []
+            async for item in run_remote_tool_async(
                 tool_id=signature_dict["tool_id"],
                 index_folder=index_folder,
                 args=args,
                 kwargs=kwargs,
                 venv=venv,
                 env_var=env_var,
-            )
+                stream=True,
+            ):
+                result.append(item)
+            return result[-1] if result else None
     else:
 
-        def func_handler(*args, **kwargs):
-            return run_remote_tool(
+        async def func_handler_async_fallback(*args, **kwargs):
+            result = []
+            async for item in run_remote_tool_async(
                 tool_id=signature_dict["tool_id"],
                 index_folder=index_folder,
                 args=args,
                 kwargs=kwargs,
                 venv=venv,
                 env_var=env_var,
-            )
+                stream=True,
+            ):
+                result.append(item)
+            return result[-1] if result else None
+
+        def func_handler(*args, **kwargs):
+            coro = func_handler_async_fallback(*args, **kwargs)
+            try:
+                # Check if we're in an async context
+                asyncio.get_running_loop()
+                in_async = True
+            except RuntimeError:
+                in_async = False
+
+            if not in_async:
+                # Safe to run directly
+                return asyncio.run(coro)
+
+            q = queue.Queue()
+
+            def runner():
+                try:
+                    result = asyncio.run(coro)
+                    q.put(result)
+                except Exception as e:
+                    q.put(e)
+
+            t = threading.Thread(target=runner)
+            t.start()
+            result = q.get()
+            t.join()
+            if isinstance(result, Exception):
+                raise result
+            return result
 
     # Reconstruct signature from list of args
     params = []
@@ -426,92 +463,7 @@ def parse_tool_signature(
     return func
 
 
-# TODO: Sanitize tool_id, args, and kwargs
-def run_remote_tool(
-    tool_id: str,
-    index_folder: os.PathLike,
-    args: list | None = None,
-    kwargs: dict | None = None,
-    venv: str = VENV_NAME,
-    env_var: dict | None = None,
-    stream: bool = False,
-):
-    args = args or []
-    kwargs = kwargs or {}
-    env_var = env_var or {}
-
-    module_name = ".".join(tool_id.split(".")[:-1])
-    tool_name = tool_id.split(".")[-1]
-    payload = json.dumps(
-        {
-            "args": args,
-            "kwargs": kwargs,
-        }
-    ).encode("utf-8")
-
-    # We use sockets to pass function output
-    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    listener.bind(("localhost", 0))
-    listener.listen(1)
-    _, port = listener.getsockname()
-
-    result_data = {}
-
-    def handle_connection_sync():
-        conn, _ = listener.accept()
-        with conn:
-            buffer = ""
-            while True:
-                chunk = conn.recv(4096).decode("utf-8")
-                if not chunk:
-                    break
-                buffer += chunk
-                while "\n" in buffer:
-                    line, buffer = buffer.split("\n", 1)
-                    if not line.strip():
-                        continue
-                    msg = json.loads(line)
-                    if msg.get("ok") and "stream" in msg:
-                        result_data.setdefault("stream", []).append(msg["stream"])
-                    elif msg.get("ok") and "result" in msg:
-                        result_data["result"] = msg["result"]
-                    elif "error" in msg:
-                        result_data["error"] = msg["error"]
-                    elif msg.get("done"):
-                        return
-
-    async def handle_connection_async():
-        loop = asyncio.get_running_loop()
-        conn, _ = await loop.sock_accept(listener)
-        conn.setblocking(False)
-        buffer = ""
-        try:
-            while True:
-                chunk = await loop.sock_recv(conn, 4096)
-                if not chunk:
-                    break
-                buffer += chunk.decode("utf-8")
-                while "\n" in buffer:
-                    line, buffer = buffer.split("\n", 1)
-                    if not line.strip():
-                        continue
-                    msg = json.loads(line)
-                    if msg.get("ok") and "stream" in msg:
-                        yield msg["stream"]
-                    elif msg.get("ok") and "result" in msg:
-                        yield msg["result"]
-                    elif "error" in msg:
-                        raise RuntimeError(f"Subprocess error:\n{msg['error']}")
-                    elif msg.get("done"):
-                        return
-        finally:
-            conn.close()
-
-    if not stream:
-        thread = threading.Thread(target=lambda: handle_connection_sync())
-        thread.start()
-
-    runner = f"""
+tool_runner = """
 import asyncio, inspect, json, socket, sys, traceback
 sys.path.insert(0, "{index_folder}")
 
@@ -560,26 +512,98 @@ finally:
         pass
 """
 
-    proc = subprocess.Popen(
-        [get_python_command(Path(index_folder) / venv), "-c", runner],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
+
+# TODO: Sanitize tool_id, args, and kwargs
+async def run_remote_tool_async(
+    tool_id: str,
+    index_folder: os.PathLike,
+    args: list | None = None,
+    kwargs: dict | None = None,
+    venv: str = VENV_NAME,
+    env_var: dict | None = None,
+    stream: bool = True,
+):
+    args = args or []
+    kwargs = kwargs or {}
+    env_var = env_var or {}
+
+    module_name = ".".join(tool_id.split(".")[:-1])
+    tool_name = tool_id.split(".")[-1]
+    payload = json.dumps({"args": args, "kwargs": kwargs}).encode("utf-8")
+
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(("localhost", 0))
+    listener.listen(1)
+    listener.setblocking(False)
+    _, port = listener.getsockname()
+
+    loop = asyncio.get_running_loop()
+    conn_task = loop.create_task(loop.sock_accept(listener))
+
+    runner = tool_runner.format(
+        index_folder=index_folder,
+        port=port,
+        module_name=module_name,
+        tool_name=tool_name,
+    )
+
+    proc = await asyncio.create_subprocess_exec(
+        get_python_command(Path(index_folder) / venv),
+        "-c",
+        runner,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
         env=env_var or None,
     )
-    proc.stdin.write(payload)
-    proc.stdin.close()
 
-    if not stream:
-        thread.join()
+    try:
+        proc.stdin.write(payload)
+        await proc.stdin.drain()
+        proc.stdin.close()
 
-        if "error" in result_data:
-            raise RuntimeError(f"Subprocess failed with error:\n{result_data['error']}")
-        elif "result" in result_data:
-            return result_data["result"]
-        elif "stream" in result_data:
-            return result_data["stream"]
-        else:
-            raise RuntimeError("Subprocess completed without returning data.")
-    else:
-        return handle_connection_async()
+        conn, _ = await conn_task
+        conn.setblocking(False)
+
+        buffer = ""
+        result = None
+        while True:
+            chunk = await loop.sock_recv(conn, 4096)
+            if not chunk:
+                break
+            buffer += chunk.decode("utf-8")
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                if not line.strip():
+                    continue
+                msg = json.loads(line)
+
+                if msg.get("ok") and "stream" in msg:
+                    if stream:
+                        yield msg["stream"]
+                    else:
+                        result = msg["stream"]
+                elif msg.get("ok") and "result" in msg:
+                    result = msg["result"]
+                elif "error" in msg:
+                    raise RuntimeError(f"Subprocess error:\n{msg['error']}")
+                elif "done" in msg and result is not None:
+                    yield result
+                    return
+
+    except asyncio.CancelledError:
+        proc.kill()
+        await proc.wait()
+        raise
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        try:
+            listener.close()
+        except Exception:
+            pass
+        if proc.returncode is None:
+            proc.kill()
+            await proc.wait()
