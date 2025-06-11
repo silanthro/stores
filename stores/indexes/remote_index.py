@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Optional
 
 import requests
-from git import GitCommandError, Repo
 
 from stores.constants import VENV_NAME
 from stores.indexes.base_index import BaseIndex
@@ -17,6 +16,11 @@ from stores.indexes.venv_utils import init_venv_tools, install_venv_deps
 logging.basicConfig()
 logger = logging.getLogger("stores.indexes.remote_index")
 logger.setLevel(logging.INFO)
+
+try:
+    from git import GitCommandError, Repo
+except Exception:
+    logger.warning("Failed to import git")
 
 # TODO: CACHE_DIR might resolve differently
 CACHE_DIR = Path(".tools")
