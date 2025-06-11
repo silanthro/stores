@@ -1,6 +1,6 @@
 [project]
 name = "stores"
-version = "0.1.8dev2"
+version = "0.1.8dev3"
 description = "Repository of Python functions and tools for LLMs"
 readme = "README.md"
 requires-python = ">=3.10"
